@@ -1,5 +1,5 @@
-const CACHE_NAME = "fangcun-v270-20260909-liquid-material-v3";
-const APP_SHELL = ["./", "./index.html", "./privacy.html", "./styles.css?v=2.7.0", "./v22-layout.css?v=2.7.0", "./smart-parser.js?v=2.7.0", "./docx-schedule-parser.js?v=2.7.0", "./app.js?v=2.7.0", "./manifest.webmanifest?v=2.7.0", "./icon.svg", "./appearance.css?v=3", "./liquid.css?v=3", "./liquid-select.js?v=3", "./appearance.js?v=3", "./liquid-renderer.js", "./three.module.min.js", "./three.core.min.js"];
+const CACHE_NAME = "fangcun-v270-20260910-liquid-material-v4";
+const APP_SHELL = ["./", "./index.html", "./privacy.html", "./styles.css?v=2.7.0", "./v22-layout.css?v=2.7.0", "./smart-parser.js?v=2.7.0", "./docx-schedule-parser.js?v=2.7.0", "./app.js?v=2.7.0", "./manifest.webmanifest?v=2.7.0", "./icon.svg", "./appearance.css?v=4", "./liquid.css?v=4", "./liquid-select.js?v=4", "./appearance.js?v=4", "./liquid-renderer.js", "./three.module.min.js", "./three.core.min.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));

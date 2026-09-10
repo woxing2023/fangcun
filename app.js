@@ -3792,7 +3792,9 @@ function initStaticEvents() {
 function updateLiveClock() {
   const now = new Date();
   $("#liveClock strong").textContent = now.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  $("#liveClock span").textContent = now.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric", weekday: "short" });
+  const today = localISO(now);
+  const focused = data.tasks.some((task) => !task.completed && (task.focusPinned || task.due === today));
+  $("#liveClock span").textContent = focused ? "专注中" : "空闲";
   $("#dateLine").textContent = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(now);
 }
 

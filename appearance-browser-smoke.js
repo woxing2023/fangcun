@@ -48,6 +48,8 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         }
       }
       async function checkSelected(selector) {
+        // Sample after the 220ms background transition settles; strictEqual stays strict.
+        await page.waitForTimeout(400);
         const states=await page.locator(selector).evaluateAll(elements=>elements.map(el=>{
           const probe=document.createElement('span');
           probe.style.cssText='background:var(--action-fill);color:var(--action-ink)';el.append(probe);

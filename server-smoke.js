@@ -51,7 +51,7 @@ async function main() {
     const mobileLayout = await fetch(`${origin}/v22-layout.css?v=2.7.0`);
     assert.equal(mobileLayout.status, 200, "服务端必须实际提供最终移动布局，不能只在安装目录里存在");
     assert.match(mobileLayout.headers.get("content-type") || "", /text\/css/);
-    for (const [asset, type] of [["liquid.css?v=3", /text\/css/], ["liquid-select.js?v=3", /javascript/]]) {
+    for (const [asset, type] of [["liquid.css?v=4", /text\/css/], ["liquid-select.js?v=4", /javascript/]]) {
       const response = await fetch(`${origin}/${asset}`);
       assert.equal(response.status, 200, `外观资源必须可获取：${asset}`);
       assert.match(response.headers.get("content-type") || "", type);

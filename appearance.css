@@ -4,8 +4,8 @@
   --control-height:44px;
   --control-radius:10px;
   --ease-fluid:cubic-bezier(.22,1,.36,1);
-  --action-fill:#344f42;
-  --action-ink:#fff;
+  --action-fill:#afaeac;
+  --action-ink:#3e4142;
   --chrome:var(--surface);
   --soft:var(--accent-soft);
   --material-shadow:none;
@@ -13,7 +13,7 @@
   --paper-shadow:var(--shadow);
   --glass-rim:rgba(255,255,255,.65);
 }
-.complete-btn.completed { background:var(--q2); border-color:var(--q2); }
+.complete-btn.completed { background:#9a9d9c; border-color:#9a9d9c; color:#f5f5f4; }
 html { color-scheme:light; }
 html[data-mode="dark"] { color-scheme:dark; }
 .field { min-width:0; align-content:start; }
@@ -45,7 +45,7 @@ button:disabled { cursor:not-allowed; opacity:.5; }
 /* Keep filled actions readable in either mode, independently of link/accent ink. */
 .primary-button, .quick-submit, .nav-item.active, .segmented button.selected,
 .view-switch button.active, .today-progress { background:var(--action-fill); color:var(--action-ink); }
-body.dark { --action-fill:#344f42; --q1:#ff968c; --q2:#e9b679; --q3:#9ac0ff; --q4:#bbc5d5; --q1-soft:#493430; --q2-soft:#493d2e; --q3-soft:#2e3b50; }
+body.dark { --action-fill:#777a79; --action-ink:#f0efed; }
 .skin-options { border:0; margin:0 0 24px; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .skin-options legend { margin-bottom:12px; font-size:12px; font-weight:600; }
 .skin-option { position:relative; display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:16px; cursor:pointer; }
@@ -85,6 +85,9 @@ html body :is(.primary-button,.quick-submit,.mobile-smart-submit,.today-progress
   .update-banner #applyUpdateBtn,.landscape-schedule-menu[open] summary) {
   color:var(--action-ink); background:var(--action-fill); border-color:var(--action-fill);
 }
+html:not([data-skin="liquid"]) body .nav-item.active { color:var(--ink); background:#d8d7d7; border-color:#d8d7d7; box-shadow:inset 0 3px 8px rgba(45,48,50,.1),inset 0 -1px 2px rgba(255,255,255,.32); }
+html body :is(.icon-button,.mobile-menu,.complete-btn,.project-action-check) { box-shadow:inset 0 2px 5px rgba(45,48,50,.06); }
+html body :is(.segmented button.selected,.view-switch button.active,.quick-toggle[aria-pressed="true"]) { box-shadow:inset 0 3px 7px rgba(45,48,50,.1); }
 html body .quick-toggle[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
 html body .nav-item:not(.active) { color:var(--muted); }
 html body .mobile-matrix-tabs button.active {

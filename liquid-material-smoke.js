@@ -23,12 +23,13 @@ async function audit(page, label, root = 'body') {
       const max = Math.max(...bg.slice(0,3)), min = Math.min(...bg.slice(0,3));
       if(bg[3]>32 && bg[1]>bg[0]*1.12 && bg[1]>bg[2]*1.12 && max-min>65) issues.push(`${name}: saturated green ${s.backgroundColor}`);
       for(const side of ['Top','Right','Bottom','Left']) {
-        if(parseFloat(s[`border${side}Width`])>0 && s[`border${side}Style`]!=='none' && rgba(s[`border${side}Color`])[3]>0) issues.push(`${name}: visible ${side} border ${s[`border${side}Color`]}`);
+        const border=rgba(s[`border${side}Color`]);
+        if(parseFloat(s[`border${side}Width`])>0 && s[`border${side}Style`]!=='none' && border[3]>96) issues.push(`${name}: high-contrast ${side} border ${s[`border${side}Color`]}`);
       }
       if(el.type==='file') {
         const fileStyle=getComputedStyle(el,'::file-selector-button');
         if(rgba(fileStyle.backgroundColor)[3]===255) issues.push(`${name}: opaque file selector button`);
-        if(parseFloat(fileStyle.borderTopWidth)>0 && rgba(fileStyle.borderTopColor)[3]>0) issues.push(`${name}: bordered file selector button`);
+        if(parseFloat(fileStyle.borderTopWidth)>0 && rgba(fileStyle.borderTopColor)[3]>96) issues.push(`${name}: high-contrast file selector border`);
       }
       if(['INPUT','TEXTAREA','SELECT'].includes(el.tagName) && !['date','time','color','range'].includes(el.type) && s.appearance !== 'none') issues.push(`${name}: native appearance ${s.appearance}`);
     }
@@ -98,6 +99,13 @@ async function audit(page, label, root = 'body') {
       await page.locator('[data-landscape-schedule-action=course]').click();
       await audit(page,`${label}/courseModal`,'#courseModal');
       await page.locator('#courseModal .close-button').click();
+      // Dense records keep their paper feedback and never mount decorative water.
+      await page.evaluate(()=>document.querySelector('.main-nav [data-view=matrix]').click());
+      const paperRecord=page.locator('.task-card').first();
+      if(await paperRecord.isVisible()) {
+        await paperRecord.hover();
+        assert.equal(await paperRecord.locator('.liquid-lens').count(),0,'Dense task records must not receive water lenses');
+      }
       // Future controls must inherit the material without requiring another selector whitelist.
       await page.evaluate(()=>{
         const box=document.createElement('section');box.id='materialFixture';

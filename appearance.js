@@ -80,8 +80,8 @@
     function surface(target) {
       if (root.dataset.skin !== "liquid" || reduced.matches || document.hidden) return null;
       if (!(target instanceof Element)) return null;
-      const control = target.closest('[data-material="glass"], button, input, textarea, select, summary, a[href], [role="button"], [role="tab"], [role="switch"], [role="option"], .skin-option, .switch-label, .import-choice label, .import-label, .task-card, .list-row, .today-class, .today-timeline-row, .today-ddl-row, .day-course-card, .day-task-card, .agenda-course, .overview-course, .month-day, [data-calendar-date]');
-      if (!control || control.disabled || control.matches('[aria-disabled="true"],.liquid-select-native,.sidebar-backdrop') || control.closest('[inert], [data-material="none"]')) return null;
+      const control = target.closest('[data-material="glass"], button, input, textarea, select, summary, a[href], [contenteditable="true"], [role="button"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], [role="option"], [role="combobox"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], .skin-option, .switch-label, .import-choice label, .import-label');
+      if (!control || control.disabled || control.matches('[aria-disabled="true"],.liquid-select-native,.sidebar-backdrop') || control.closest('[inert], [data-material="none"], [data-material="paper"], .task-card, .list-row, .today-class, .today-timeline-row, .today-ddl-row, .day-course-card, .day-task-card, .agenda-course, .overview-course, .course-block, .calendar-week-event, .calendar-entry, .month-day, [data-calendar-date]')) return null;
       if (active?.target === control) return active;
       clear();
       const rect = control.getBoundingClientRect();

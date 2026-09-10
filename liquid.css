@@ -11,7 +11,7 @@ html[data-skin="liquid"] body {
   --muted:#596a7a;
   --accent:#4c657f;
   --accent-soft:rgba(130,157,187,.18);
-  --line:transparent;
+  --line:rgba(111,136,163,.24);
   --q1:#8d5968; --q1-soft:rgba(177,128,141,.15);
   --q2:#806a4f; --q2-soft:rgba(177,157,128,.15);
   --q3:#526c87; --q3-soft:rgba(128,156,188,.16);
@@ -22,6 +22,8 @@ html[data-skin="liquid"] body {
   --liquid-pressed:rgba(135,159,188,.30);
   --liquid-panel:rgba(243,247,252,.57);
   --liquid-dialog:rgba(237,243,250,.83);
+  --liquid-paper:rgba(249,252,255,.52);
+  --liquid-edge:rgba(111,136,163,.24);
   --liquid-highlight:rgba(255,255,255,.70);
   --liquid-shade:rgba(71,91,112,.16);
   --liquid-focus:rgba(80,112,149,.35);
@@ -49,6 +51,7 @@ html[data-skin="liquid"] body.dark {
   --muted:#a9b8c9;
   --accent:#b3c6df;
   --accent-soft:rgba(134,161,196,.18);
+  --line:rgba(177,200,227,.20);
   --q1:#d3b2be; --q1-soft:rgba(163,119,139,.18);
   --q2:#cdbda5; --q2-soft:rgba(170,148,117,.18);
   --q3:#b4c9e1; --q3-soft:rgba(114,147,187,.19);
@@ -59,6 +62,8 @@ html[data-skin="liquid"] body.dark {
   --liquid-pressed:rgba(117,145,180,.34);
   --liquid-panel:rgba(43,56,73,.58);
   --liquid-dialog:rgba(40,53,70,.88);
+  --liquid-paper:rgba(65,80,99,.38);
+  --liquid-edge:rgba(177,200,227,.20);
   --liquid-highlight:rgba(200,223,250,.16);
   --liquid-shade:rgba(7,15,29,.36);
   --liquid-focus:rgba(172,199,234,.43);
@@ -70,14 +75,14 @@ html[data-skin="liquid"] body.dark {
 }
 
 @layer liquid-material {
-  /* Neutralize legacy outlines without changing dimensions or calendar tracks. */
-  html[data-skin="liquid"] body :where(*) { border-color:transparent !important; }
+  /* A shared, translucent edge replaces opaque paper outlines. */
+  html[data-skin="liquid"] body :where(*) { border-color:var(--liquid-edge) !important; }
 
   /* Native semantics cover future controls automatically; data-material is the
      extension point for custom widgets. Existing clickable content joins once. */
   html[data-skin="liquid"] body :where(
-    button,input:not([type="hidden"]),textarea,select,option,summary,a[href],[role="button"],[role="tab"],[role="switch"],
-    [role="checkbox"],[role="radio"],[role="option"],[role="combobox"],[data-material="glass"],
+    button,input:not([type="hidden"]),textarea,select,option,summary,a[href],[contenteditable="true"],[role="button"],[role="tab"],[role="switch"],
+    [role="checkbox"],[role="radio"],[role="option"],[role="combobox"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[data-material="glass"],
     .skin-option,.import-label,.import-choice label,.switch-label,
     .task-card,.list-row,.today-class,.today-timeline-row,.today-ddl-row,
     .day-course-card,.day-task-card,.agenda-course,.overview-course,.month-day,[data-calendar-date]
@@ -87,7 +92,7 @@ html[data-skin="liquid"] body.dark {
     --liquid-control-shadow:var(--material-shadow);
     background:var(--liquid-control-fill) !important;
     color:var(--liquid-control-ink) !important;
-    border-color:transparent !important;
+    border-color:var(--liquid-edge) !important;
     border-radius:var(--liquid-radius) !important;
     box-shadow:var(--liquid-control-shadow) !important;
     -webkit-backdrop-filter:var(--material-blur) !important;
@@ -106,7 +111,7 @@ html[data-skin="liquid"] body.dark {
   html[data-skin="liquid"] body :where(input,textarea,select) { appearance:none !important; -webkit-appearance:none !important; }
   html[data-skin="liquid"] body :where(input[type="file"])::file-selector-button {
     background:var(--liquid-fill) !important; color:var(--ink) !important;
-    border-color:transparent !important; border-radius:var(--liquid-radius) !important;
+    border-color:var(--liquid-edge) !important; border-radius:var(--liquid-radius) !important;
     box-shadow:var(--material-shadow) !important; font:inherit;
     -webkit-backdrop-filter:var(--material-blur); backdrop-filter:var(--material-blur);
   }
@@ -135,6 +140,22 @@ html[data-skin="liquid"] body.dark {
   }
   html[data-skin="liquid"] body dialog::backdrop { background:rgba(34,49,68,.24); backdrop-filter:blur(7px); }
   html[data-skin="liquid"] body :where(.modal-header,.modal-footer,.mobile-create-sheet header) { background:transparent !important; }
+
+  /* Dense records remain quiet paper: they share the cool translucent palette,
+     but do not pretend that schedules and task rows are floating controls. */
+  html[data-skin="liquid"] body :where(
+    .task-card,.list-row,.today-class,.today-timeline-row,.today-ddl-row,
+    .day-course-card,.day-task-card,.agenda-course,.overview-course,.course-block,
+    .calendar-week-event,.calendar-entry,.project-card,[data-material="paper"]
+  ) {
+    --liquid-control-fill:var(--liquid-paper);
+    --liquid-control-shadow:inset 0 2px 5px -3px var(--liquid-highlight),0 3px 10px rgba(56,74,96,.035);
+    background:var(--liquid-control-fill) !important;
+    border-color:var(--liquid-edge) !important;
+    -webkit-backdrop-filter:none !important;
+    backdrop-filter:none !important;
+  }
+  html[data-skin="liquid"] body [data-material="paper"] { --liquid-radius:10px; }
 
   /* UI statuses and identity never use opaque semantic paint. */
   html[data-skin="liquid"] body :where(.meta-tag,.identity-tag,.project-status,.nav-count,.quadrant-action,
@@ -192,11 +213,18 @@ html[data-skin="liquid"] body.dark {
   html[data-skin="liquid"] body :where(.calendar-hour,.calendar-week-corner,.schedule-time,.schedule-day-head) { background:var(--liquid-panel) !important; }
   html[data-skin="liquid"] body :where(.mobile-bottom-nav button,.view-switch button,.calendar-zoom-tools button,.mini-days button) { --material-blur:blur(10px) saturate(.72); }
 
+  /* Calendar tracks and completion controls retain their established compact
+     geometry; only their paint is cooled down. They never receive water lenses. */
+  html[data-skin="liquid"] body :where(.calendar-time-cell,.calendar-all-day,.calendar-week-head,.month-day,.complete-btn,.project-action-check) {
+    -webkit-backdrop-filter:none !important;
+    backdrop-filter:none !important;
+  }
+
   /* Semantics-based interaction states also cover new controls. */
   html[data-skin="liquid"] body :where(.primary-button,.quick-submit,.mobile-smart-submit,#mobileNavCreate) { --liquid-control-fill:var(--liquid-selected); font-weight:650; }
   @media (hover:hover) {
-    html[data-skin="liquid"] body :where(button,input,textarea,select,summary,a[href],[role="button"],[role="tab"],[role="option"],
-      [data-material="glass"],.skin-option,.import-label,.import-choice label,.task-card,.list-row,.month-day):not(:disabled):not([aria-disabled="true"]):hover {
+    html[data-skin="liquid"] body :where(button,input,textarea,select,summary,a[href],[contenteditable="true"],[role="button"],[role="tab"],[role="option"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],
+      [data-material="glass"],.skin-option,.import-label,.import-choice label,.task-card,.list-row,.month-day):where(:not(:disabled):not([aria-disabled="true"]):hover) {
       --liquid-control-fill:var(--liquid-hover);
       --liquid-control-shadow:inset 0 5px 10px -5px var(--liquid-highlight),inset 0 -5px 8px -7px var(--liquid-shade),0 7px 20px rgba(57,76,102,.08);
     }
@@ -213,7 +241,7 @@ html[data-skin="liquid"] body.dark {
   html[data-skin="liquid"] body :where(.month-day.today > header strong,.schedule-day-head.today strong,.project-check-row.completed i) {
     background:var(--liquid-selected) !important; color:var(--ink) !important; box-shadow:var(--material-shadow) !important;
   }
-  html[data-skin="liquid"] body :where(button,input,summary,a[href],[role="button"],[role="tab"],[role="option"],.skin-option,.import-label):not(:disabled):active { --liquid-control-fill:var(--liquid-pressed); --liquid-control-shadow:inset 0 4px 10px -5px var(--liquid-shade); }
+  html[data-skin="liquid"] body :where(button,input,summary,a[href],[contenteditable="true"],[role="button"],[role="tab"],[role="option"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],.skin-option,.import-label):where(:not(:disabled):active) { --liquid-control-fill:var(--liquid-pressed); --liquid-control-shadow:inset 0 4px 10px -5px var(--liquid-shade); }
   html[data-skin="liquid"] body :where(input[readonly],textarea[readonly]) { --liquid-control-fill:var(--liquid-panel); }
   html[data-skin="liquid"] body :where(:disabled,[aria-disabled="true"]) { opacity:.52 !important; cursor:not-allowed !important; }
   html[data-skin="liquid"] body :where(.danger-button,.delete,[data-user-status-id],[aria-invalid="true"],input:user-invalid,textarea:user-invalid,select:user-invalid) { --liquid-control-ink:var(--q1); }
@@ -221,8 +249,8 @@ html[data-skin="liquid"] body.dark {
   html[data-skin="liquid"] body :where(.project-card.risk .project-status,.deadline-chip.soon time) { background:var(--q2-soft) !important; color:var(--q2) !important; }
 
   /* Focus is a soft, broad keyboard-only halo, never a permanent fine outline. */
-  html[data-skin="liquid"] body :where(button,input,textarea,select,summary,a[href],[tabindex]):focus { outline:none !important; }
-  html[data-skin="liquid"] body :where(button,input,textarea,select,summary,a[href],[tabindex]):focus-visible {
+  html[data-skin="liquid"] body :where(button,input,textarea,select,summary,a[href],[contenteditable="true"],[tabindex]):focus { outline:none !important; }
+  html[data-skin="liquid"] body :where(button,input,textarea,select,summary,a[href],[contenteditable="true"],[tabindex]):focus-visible {
     --liquid-control-shadow:var(--material-shadow),0 0 0 4px var(--liquid-focus),0 0 16px 5px var(--liquid-focus-haze);
     box-shadow:var(--liquid-control-shadow) !important;
   }
@@ -254,7 +282,7 @@ html[data-skin="liquid"] body.dark {
 
   /* Decorations are never the original paper palette, even when effects stop. */
   html[data-skin="liquid"] body :where(.liquid-wave) { border:0 !important; box-shadow:0 0 12px rgba(211,229,249,.24),inset 0 0 7px rgba(224,237,252,.22) !important; }
-  html[data-skin="liquid"] body .skin-option { border-width:0 !important; }
+  html[data-skin="liquid"] body .skin-option { border-color:var(--liquid-edge) !important; }
   html[data-skin="liquid"] body.privacy-page main { background:var(--liquid-panel) !important; box-shadow:var(--shadow) !important; }
   @media (prefers-reduced-motion:reduce) {
     html[data-skin="liquid"] body :where(*, *::before,*::after) { animation:none !important; transition:none !important; translate:none !important; }
@@ -284,6 +312,6 @@ html[data-skin="liquid"] body.dark {
 @media (max-width:720px) { .liquid-select-trigger,.liquid-select-option { font-size:16px; } }
 /* Without blur, keep a translucent but clearer panel and preserve the same colors. */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
-  html[data-skin="liquid"] body { --liquid-panel:rgba(235,241,248,.88); --liquid-dialog:rgba(235,241,248,.96); --liquid-fill:rgba(244,249,254,.65); }
-  html[data-skin="liquid"] body.dark { --liquid-panel:rgba(42,55,73,.90); --liquid-dialog:rgba(37,50,67,.97); --liquid-fill:rgba(77,96,119,.47); }
+  html[data-skin="liquid"] body { --liquid-panel:rgba(235,241,248,.88); --liquid-dialog:rgba(235,241,248,.96); --liquid-paper:rgba(246,250,254,.76); --liquid-fill:rgba(244,249,254,.65); }
+  html[data-skin="liquid"] body.dark { --liquid-panel:rgba(42,55,73,.90); --liquid-dialog:rgba(37,50,67,.97); --liquid-paper:rgba(68,84,104,.58); --liquid-fill:rgba(77,96,119,.47); }
 }
