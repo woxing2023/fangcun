@@ -10,6 +10,10 @@
     <link rel="manifest" href="manifest.webmanifest?v=2.7.0" />
     <link rel="stylesheet" href="styles.css?v=2.7.0" />
     <link rel="stylesheet" href="v22-layout.css?v=2.7.0" />
+    <link rel="stylesheet" href="appearance.css?v=3" />
+    <link rel="stylesheet" href="liquid.css?v=3" />
+    <script src="appearance.js?v=3"></script>
+    <script src="liquid-select.js?v=3" defer></script>
   </head>
   <body data-active-view="today">
     <svg class="icon-sprite" aria-hidden="true">
@@ -72,6 +76,7 @@
         <div class="sidebar-actions">
           <button class="sidebar-action cloud-button" id="cloudBtn"><svg class="ui-icon"><use href="#icon-cloud" /></svg><span class="data-hub-label">数据与同步<small id="cloudLabel">仅本机</small></span><i class="sync-dot" id="cloudDot"></i></button>
           <button class="sidebar-action" id="reminderSettingsBtn"><svg class="ui-icon"><use href="#icon-bell" /></svg><span>提醒设置</span></button>
+          <button type="button" class="sidebar-action" id="appearanceSettingsBtn"><svg class="ui-icon"><use href="#icon-moon" /></svg><span>外观设置</span></button>
           <a class="legal-link app-filing-link" href="https://beian.miit.gov.cn/" rel="noopener">APP 备案号：{{APP_BEIAN}}</a>
         </div>
       </aside>
@@ -473,6 +478,18 @@
     </dialog>
 
     <div class="toast" id="toast" role="status"></div>
+    <dialog class="modal appearance-modal" id="appearanceModal" aria-labelledby="appearanceTitle">
+      <form method="dialog">
+        <div class="modal-header"><div><span class="eyebrow">外观设置</span><h2 id="appearanceTitle">选择你的方寸</h2></div><button class="close-button" aria-label="关闭外观设置">×</button></div>
+        <fieldset class="skin-options"><legend>界面皮肤</legend>
+          <label class="skin-option"><input type="radio" name="skin" value="classic" /><span class="skin-preview preview-classic" aria-hidden="true"><i></i><i></i><i></i></span><strong>经典纸感</strong><small>熟悉的暖纸、墨色与绿色</small></label>
+          <label class="skin-option"><input type="radio" name="skin" value="liquid" /><span class="skin-preview preview-liquid" aria-hidden="true"><i></i><i></i><i></i></span><strong>流光玻璃</strong><small>冷银雾面、通透叠层与柔和水纹</small></label>
+        </fieldset>
+        <label class="field"><span>显示模式</span><select id="appearanceMode"><option value="light">浅色</option><option value="dark">深色</option></select></label>
+        <p class="field-hint" id="appearanceStatus" role="status">选择立即生效，仅保存在当前设备。</p>
+        <div class="appearance-footer"><button class="primary-button">完成</button></div>
+      </form>
+    </dialog>
     <script src="smart-parser.js?v=2.7.0"></script>
     <script src="docx-schedule-parser.js?v=2.7.0"></script>
     <script src="app.js?v=2.7.0"></script>

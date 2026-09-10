@@ -1162,8 +1162,8 @@ function renderTaskCard(task) {
     <div class="task-meta">
       ${dueText ? `<span class="meta-tag deadline-status ${dueClass}">◷ ${escapeHTML(dueText)}</span>` : ""}
       ${scheduleText ? `<span class="meta-tag">▣ ${escapeHTML(scheduleText)}</span>` : ""}
-      ${project ? `<span class="meta-tag" style="color:${projectColors[project.color] || projectColors.sage}">◇ ${escapeHTML(project.name)}</span>` : ""}
-      ${course ? `<span class="meta-tag" style="color:${course.color}">▦ ${escapeHTML(course.name)}</span>` : ""}
+      ${project ? `<span class="meta-tag identity-tag" style="--identity-color:${projectColors[project.color] || projectColors.sage}">◇ ${escapeHTML(project.name)}</span>` : ""}
+      ${course ? `<span class="meta-tag identity-tag" style="--identity-color:${course.color}">▦ ${escapeHTML(course.name)}</span>` : ""}
       ${task.type && task.type !== "task" ? `<span class="meta-tag">${taskTypeLabels[task.type] || "任务"}</span>` : ""}
       ${task.repeat && task.repeat !== "none" ? `<span class="meta-tag">↻ ${repeatLabels[task.repeat]}</span>` : ""}
       ${task.today ? '<span class="meta-tag">今日</span>' : ""}
@@ -1198,7 +1198,7 @@ function renderListRow(task, mode) {
   if (info) detailParts.push(info.name);
   if (!detailParts.length) detailParts.push("尚未设置日期和分类");
   return `<div class="list-row" data-task-id="${task.id}">
-    <button class="complete-btn" data-complete-id="${task.id}" data-complete-to="${!task.completed}" aria-label="${task.completed ? "恢复" : "完成"}事项" ${task.completed ? 'style="background:var(--q2);border-color:var(--q2)"' : ""}></button>
+    <button class="complete-btn ${task.completed ? "completed" : ""}" data-complete-id="${task.id}" data-complete-to="${!task.completed}" aria-pressed="${task.completed}" aria-label="${task.completed ? "恢复" : "完成"}事项"></button>
     <div class="list-main"><strong style="${task.completed ? "text-decoration:line-through;opacity:.55" : ""}">${escapeHTML(task.title)}</strong><span>${escapeHTML(detailParts.join(" · "))}</span></div>
     <div class="row-actions">${mode === "inbox" ? `<button class="classify-button" data-inbox-reparse="${task.id}">重新识别</button>` : info ? `<span class="meta-tag" style="color:${info.color}">${info.action}</span>` : ""}</div>
   </div>`;

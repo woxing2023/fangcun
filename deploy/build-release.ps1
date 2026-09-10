@@ -13,6 +13,7 @@ $archive = Join-Path $releaseRoot "fangcun-release-$Version.tar.gz"
 $rootFiles = @(
     ".env.example", "AGENTS.md", "README.md", "package.json", "index.html", "privacy.html", "styles.css", "v22-layout.css",
     "smart-parser.js", "docx-schedule-parser.js", "app.js", "manifest.webmanifest", "icon.svg",
+    "appearance.css", "liquid.css", "liquid-select.js", "appearance.js", "appearance-browser-smoke.js", "liquid-renderer.js", "three.module.min.js", "three.core.min.js", "THREE-LICENSE.txt",
     "service-worker.js", "server.js", "outlook-sync.js", "google-sync.js", "reset-password.js", "smart-parser-smoke.js",
     "docx-schedule-smoke.js", "outlook-sync-smoke.js", "google-sync-smoke.js", "smoke-test.js", "runtime-smoke.js",
     "mobile-smoke.js", "mobile-interaction-smoke.js", "v22-smoke.js", "android-smoke.js", "release-smoke.js", "password-reset-smoke.js", "server-smoke.js"

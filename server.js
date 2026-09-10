@@ -16,7 +16,7 @@ const databasePath = path.join(dataDirectory, "fangcun.sqlite");
 const trustProxy = process.env.TRUST_PROXY === "true";
 const sessionMaxAge = 30 * 24 * 60 * 60;
 const maxBodyBytes = 2 * 1024 * 1024;
-const publicFiles = new Set(["index.html", "privacy.html", "styles.css", "v22-layout.css", "smart-parser.js", "docx-schedule-parser.js", "app.js", "manifest.webmanifest", "icon.svg", "service-worker.js"]);
+const publicFiles = new Set(["index.html", "privacy.html", "styles.css", "v22-layout.css", "smart-parser.js", "docx-schedule-parser.js", "app.js", "manifest.webmanifest", "icon.svg", "service-worker.js", "appearance.css", "liquid.css", "liquid-select.js", "appearance.js", "liquid-renderer.js", "three.module.min.js", "three.core.min.js"]);
 const types = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".webmanifest": "application/manifest+json; charset=utf-8", ".svg": "image/svg+xml" };
 const attempts = new Map();
 
