@@ -34,3 +34,11 @@ docs/方寸-v2.2-最终交付报告.md
 
 # 个人真实数据（只留在本地，绝不进 git；示例在 imports/examples/）
 /imports/*.json
+
+# 内部归档与一次性脚本（永不入库）
+aicb-release-calendar3/
+release/
+归档.zip
+launch-codex.sh
+launch-refine.sh
+smoke-bisect-root.js

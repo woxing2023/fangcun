@@ -149,7 +149,7 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
+        settings.setAllowContentAccess(true);
         settings.setSaveFormData(false);
         settings.setSupportMultipleWindows(false);
         settings.setSafeBrowsingEnabled(true);

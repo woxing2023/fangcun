@@ -5,7 +5,7 @@
     const controls = new Map();
     let serial = 0, opened = null, scheduled = false;
     const liquid = () => document.documentElement.dataset.skin === 'liquid';
-    const eligible = select => !select.multiple && select.size <= 1;
+    const eligible = select => !select.multiple && select.size <= 1 && !select.hasAttribute("data-inline-choice");
     const disabled = option => option.disabled || option.parentElement?.disabled;
     function close() {
       if (!opened) return;
@@ -98,6 +98,7 @@
         });
         if (opened === state) { place(state); highlight(state, select.selectedIndex); }
       }
+      state.selectedIndex = select.selectedIndex;
       if (opened === state && (trigger.disabled || !trigger.getClientRects().length)) close();
     }
     function attach(select) {
@@ -176,27 +177,50 @@
       document.querySelectorAll('select').forEach(select => { if (eligible(select) && !controls.has(select)) attach(select); });
       controls.forEach(sync);
     }
-    const schedule = () => { if (!scheduled) { scheduled = true; queueMicrotask(reconcile); } };
+    let fullRefresh = false;
+    const dirtyControls = new Set();
+    const schedule = state => {
+      if (state) dirtyControls.add(state); else fullRefresh = true;
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        const full = fullRefresh; fullRefresh = false;
+        const dirty = [...dirtyControls]; dirtyControls.clear();
+        if (full) reconcile();
+        else dirty.forEach(state => { if (controls.has(state.select)) sync(state); });
+      });
+    };
     const containsSelect = node => node instanceof Element && (node.matches('select') || !!node.querySelector('select'));
     new MutationObserver(records => {
-      if (records.some(record => {
+      for (const record of records) {
         const target = record.target instanceof Element ? record.target : record.target.parentElement;
-        if (!target || target.closest('.liquid-select-trigger,.liquid-select-menu,.liquid-lens')) return false;
-        if (target.closest('select')) return true;
-        if (record.type === 'attributes') return (target === document.documentElement && record.attributeName === 'data-skin') || (['disabled', 'hidden', 'open'].includes(record.attributeName) && containsSelect(target));
-        return record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].some(containsSelect);
-      })) schedule();
+        if (!target || target.closest('.liquid-select-trigger,.liquid-select-menu,.liquid-lens')) continue;
+        const select = target.closest('select');
+        if (select) {
+          const state = controls.get(select);
+          if (state && eligible(select)) schedule(state); else schedule();
+          continue;
+        }
+        if (record.type === 'attributes') {
+          if ((target === document.documentElement && record.attributeName === 'data-skin') || (['disabled', 'hidden', 'open'].includes(record.attributeName) && containsSelect(target))) schedule();
+        } else if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].some(containsSelect)) schedule();
+      }
     }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-skin', 'disabled', 'required', 'hidden', 'multiple', 'size', 'selected', 'value', 'label', 'open', 'aria-label', 'aria-labelledby', 'aria-describedby'] });
-    document.addEventListener('change', event => { if (event.target instanceof HTMLSelectElement) schedule(); });
-    document.addEventListener('input', event => { if (event.target instanceof HTMLSelectElement) schedule(); });
+    document.addEventListener('change', event => { if (event.target instanceof HTMLSelectElement) schedule(controls.get(event.target)); });
+    document.addEventListener('input', event => { if (event.target instanceof HTMLSelectElement) schedule(controls.get(event.target)); });
     document.addEventListener('reset', () => setTimeout(reconcile, 0));
     document.addEventListener('pointerdown', event => { if (opened && !opened.trigger.contains(event.target) && !opened.menu.contains(event.target)) close(); }, true);
     document.addEventListener('focusin', event => { if (opened && !opened.trigger.contains(event.target) && !opened.menu.contains(event.target)) close(); });
     document.addEventListener('scroll', event => { if (opened && !opened.menu.contains(event.target)) place(opened); }, true);
     window.addEventListener('resize', () => { if (opened) place(opened); });
-    // Programmatic .value assignments emit no DOM event. Visible controls are
-    // sampled without modifying browser prototypes or business code.
-    setInterval(() => { if (liquid() && !document.hidden) controls.forEach(state => { if (state.trigger.getClientRects().length) sync(state); }); }, 150);
+    // Property-only .value assignments emit no mutation or event. The fallback
+    // compares one primitive per control; unchanged controls perform no geometry
+    // reads, label cloning, option serialization or DOM writes.
+    setInterval(() => {
+      if (!liquid() || document.hidden) return;
+      controls.forEach(state => { if (state.selectedIndex !== state.select.selectedIndex) sync(state); });
+    }, 500);
     reconcile();
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();

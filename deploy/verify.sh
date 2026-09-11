@@ -15,6 +15,10 @@ printf '%s' "$HEALTH_RESPONSE" | grep -q '"ok":true'
 echo "[3/4] 监听地址"
 ss -lnt | grep -q '127\.0\.0\.1:18443'
 ss -lnt | grep '127\.0\.0\.1:18443'
+if ! ss -H -lnt | awk '$4 ~ /:18443$/ && $4 != "127.0.0.1:18443" { bad=1 } END { exit bad }'; then
+  echo "18443 存在非本机监听地址，请核对服务配置。" >&2
+  exit 1
+fi
 
 echo "[4/4] 最近服务日志"
 journalctl -u fangcun.service -n 20 --no-pager

@@ -1,0 +1,294 @@
+/* Xuan paper: passive content surfaces, with separate glass actions.
+   This layer is declared BEFORE liquid-material: important paper paint wins
+   over its legacy panel paint. No pseudo-elements, hit targets or GPU loops.
+   Extension: <section class="xuan-paper"> or data-material="xuan". */
+@layer xuan-material;
+
+@font-face {
+  font-family:"Fangcun UI"; src:url("xuan-sans.woff2?v=2") format("woff2");
+  font-style:normal; font-weight:350 650; font-display:swap;
+}
+@font-face {
+  font-family:"Fangcun Display"; src:url("xuan-serif.woff2?v=2") format("woff2");
+  font-style:normal; font-weight:400; font-display:swap;
+}
+html[data-skin] body {
+  font-family:"Fangcun UI","PingFang SC","Microsoft YaHei",sans-serif !important;
+  font-weight:400; font-synthesis:none;
+  -webkit-font-smoothing:antialiased;
+}
+html body :is(.brand strong,.auth-brand strong,.topbar h1,.today-heading h2) {
+  font-family:"Fangcun Display","Songti SC","STSong",serif; font-weight:400;
+}
+html body :is(.focus-task-main strong,.today-section-title h3,.sidebar-note > strong) { font-weight:550; }
+html body :is(.eyebrow,.primary-button,.nav-item,.sidebar-action) { font-weight:450; }
+
+html body {
+  --xuan-base:rgba(241,237,231,.94);
+  --xuan-light:rgba(255,255,255,.30);
+  --xuan-shade:rgba(168,161,151,.08);
+  --xuan-edge:rgba(255,255,255,.66);
+  --xuan-rim:rgba(255,255,255,.78);
+  --xuan-shadow:inset 0 1px 1px var(--xuan-rim),inset 1px 0 1px rgba(255,255,255,.50),inset 0 -2px 3px rgba(117,111,103,.13),0 2px 2px rgba(255,255,255,.20),0 10px 16px -8px rgba(45,48,50,.18),0 26px 38px -19px rgba(45,48,50,.26);
+  --xuan-grain:url("xuan-fibers-mobile.png?v=1");
+  --xuan-image:var(--xuan-grain),linear-gradient(128deg,var(--xuan-light),transparent 48%,var(--xuan-shade));
+  --xuan-size:360px 360px,100% 100%;
+  --xuan-blend:multiply,normal;
+  --xuan-ink:#23313d;
+  --xuan-muted:#55606a;
+}
+html body.dark {
+  --xuan-base:rgba(48,51,55,.96);
+  --xuan-light:rgba(231,224,210,.055);
+  --xuan-shade:rgba(8,13,20,.16);
+  --xuan-edge:rgba(217,224,232,.16);
+  --xuan-rim:rgba(243,237,224,.13);
+  --xuan-shadow:inset 0 1px 1px var(--xuan-rim),inset 0 -2px 3px rgba(0,0,0,.20),0 12px 18px -8px rgba(0,0,0,.24),0 26px 38px -19px rgba(0,0,0,.34);
+  --xuan-veil:rgba(48,51,55,.84);
+  --xuan-image:linear-gradient(var(--xuan-veil),var(--xuan-veil)),var(--xuan-grain);
+  --xuan-size:100% 100%,360px 360px;
+  --xuan-blend:normal,soft-light;
+  --xuan-ink:#e7e9eb;
+  --xuan-muted:#b4bbc3;
+}
+html[data-skin="liquid"] body { --xuan-base:rgba(240,239,235,.92); }
+html[data-skin="liquid"] body.dark { --xuan-base:rgba(44,53,64,.95); --xuan-veil:rgba(44,53,64,.84); }
+
+@layer xuan-material {
+  /* Paper uses the shared 720px PNG at 360 CSS px; the SVG remains its source.
+     Calendar material belongs to calendar-surface.css.
+     Deliberate allowlist. Clickable records, calendar cells, controls and
+     control groups keep glass/semantic paint, including inside paper panels. */
+  html body :is(
+    .xuan-paper,[data-material="xuan"],.sidebar,.topbar,.sidebar-note,
+    .quadrant,.list-panel,.today-next,.today-section,.today-aside,.today-progress,
+    .project-dashboard > div,.admin-card,.admin-stat,.admin-user,.admin-detail,
+    .schedule-board-wrap,.year-calendar,.month-calendar,.week-calendar,.overview-day,
+    .overview-summary > div,.reminders-card,.calendar-integration-setting,.calendar-subscription-setting,
+    .smart-preview-card,.smart-source,.smart-time-suggestion,.decision-box,.quadrant-preview,
+    .course-task-actions,.course-linked-panel,.sync-recovery,
+    .import-preview,.import-preview-card,.calendar-preset,.calendar-rule,.slot-settings,
+    dialog,.auth-card,.privacy-page main
+  ):not(:where(button,a[href],input,textarea,select,summary,[role="button"],[role="tab"],
+    [contenteditable="true"],[data-task-id],[data-course-id],[data-project-id],[data-calendar-date],[data-material="none"])):not(:where(#scheduleView,#scheduleView *)) {
+    background-color:var(--xuan-base) !important;
+    background-image:var(--xuan-image) !important;
+    background-size:var(--xuan-size) !important;
+    background-repeat:repeat !important;
+    background-blend-mode:var(--xuan-blend) !important;
+    border-color:var(--xuan-edge) !important;
+    box-shadow:var(--xuan-shadow) !important;
+    color:var(--xuan-ink) !important;
+    -webkit-backdrop-filter:none !important;
+    backdrop-filter:none !important;
+  }
+  html body :is(.xuan-paper,[data-material="xuan"]) { border:1px solid var(--xuan-edge); border-radius:var(--radius); }
+  html body :is(.sidebar-note,.today-aside,.today-progress) :is(p,span,.eyebrow):not(:where(#scheduleView,#scheduleView *)) { color:var(--xuan-muted) !important; }
+  html body .sidebar-note::after { display:none !important; }
+  html body :is(.modal-header,.modal-footer,.mobile-create-sheet header):not(:where(#scheduleView,#scheduleView *)) { background:transparent !important; }
+  /* Opaque paper fallbacks use the same fiber tile. */
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+    html body { --xuan-base:#eeeae4 !important; }
+    html body.dark { --xuan-base:#30353c !important; }
+  }
+  @media (max-width:960px), (pointer:coarse) {
+    html body { --xuan-shadow:inset 0 1px 0 var(--xuan-rim),0 3px 9px rgba(45,48,50,.055) !important; }
+    html body.dark { --xuan-shadow:inset 0 1px 0 var(--xuan-rim),0 3px 9px rgba(0,0,0,.10) !important; }
+  }
+  @media (forced-colors:active) {
+    html body,html body.dark {
+      --xuan-base:Canvas !important; --xuan-ink:CanvasText !important; --xuan-muted:CanvasText !important;
+      --xuan-edge:CanvasText !important; --xuan-image:none !important; --xuan-shadow:none !important;
+    }
+    html body :is(.xuan-paper,[data-material="xuan"],.sidebar,.topbar,dialog,.auth-card) { border:1px solid CanvasText !important; }
+  }
+}
+
+/* Classic gains the reference's neutral optical controls. Liquid continues
+   to use its existing interaction recipe and on-demand water renderer. */
+html:not([data-skin="liquid"]) body:not(.dark) {
+  --bg:#d1d1d2; --ink:#23313d; --muted:#55606a;
+  --accent:#536575; --accent-soft:rgba(139,151,163,.18);
+  --line:rgba(112,121,130,.23);
+  --surface:rgba(242,241,239,.56); --card:rgba(250,250,249,.40);
+  --action-fill:rgba(153,164,176,.32); --action-ink:var(--ink);
+  --chrome:rgba(247,248,249,.38);
+  --glass-rim:rgba(255,255,255,.74);
+  --material-blur:blur(16px) saturate(.65);
+  --material-shadow:inset 0 2px 3px rgba(255,255,255,.92),inset 2px 0 4px rgba(255,255,255,.38),inset 0 -3px 5px rgba(122,132,143,.16),0 2px 2px rgba(255,255,255,.28),0 8px 15px -6px rgba(45,48,50,.22);
+  background-color:var(--bg);
+  background-image:radial-gradient(ellipse at 9% 12%,rgba(255,255,255,.55),transparent 45%),radial-gradient(ellipse at 85% 55%,rgba(162,168,175,.20),transparent 50%),linear-gradient(130deg,#d9d9d9 0%,#c9cacc 65%,#dedddd 100%);
+}
+html:not([data-skin="liquid"]) body.dark {
+  --bg:#24282e; --ink:#e7e9eb; --muted:#b4bbc3;
+  --accent:#b8c9d9; --accent-soft:rgba(157,179,203,.16);
+  --line:rgba(206,219,234,.17);
+  --surface:rgba(60,69,81,.66); --card:rgba(96,110,128,.20);
+  --action-fill:rgba(143,165,191,.27); --action-ink:var(--ink);
+  --chrome:rgba(107,125,146,.18);
+  --glass-rim:rgba(224,233,243,.19);
+  --material-blur:blur(16px) saturate(.65);
+  --material-shadow:inset 0 1px 1px var(--glass-rim),inset 0 -1px 2px rgba(194,210,230,.04),0 5px 12px rgba(0,0,0,.12);
+  background-image:radial-gradient(ellipse at 12% 4%,rgba(154,167,183,.08),transparent 60%),linear-gradient(135deg,#282d34,#1d2229);
+}
+@layer xuan-material {
+  html:not([data-skin="liquid"]) body :where(
+    button:not(.sidebar-backdrop),summary,[role="button"],[role="tab"],
+    .import-label,.skin-option,.quick-add,.mobile-bottom-nav,.live-clock,
+    input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),textarea,select
+  ):not(:where(#scheduleView,#scheduleView *)) {
+    background-color:var(--chrome) !important;
+    border-color:var(--glass-rim) !important;
+    box-shadow:var(--material-shadow) !important;
+    color:var(--ink) !important;
+    -webkit-backdrop-filter:var(--material-blur);
+    backdrop-filter:var(--material-blur);
+    transition:background-color .22s var(--ease-fluid),box-shadow .22s var(--ease-fluid);
+  }
+  html:not([data-skin="liquid"]) body :where(button:not(.sidebar-backdrop),summary,.quick-add,.mobile-bottom-nav,.live-clock):not(:where(#scheduleView,#scheduleView *)) {
+    background-image:radial-gradient(ellipse at 12% -20%,rgba(255,255,255,.8),transparent 66%),linear-gradient(160deg,rgba(255,255,255,.30),transparent 45%,rgba(160,170,182,.12) 72%,rgba(255,255,255,.22)) !important;
+  }
+  html:not([data-skin="liquid"]) body.dark :where(button,summary,.quick-add,.mobile-bottom-nav,.live-clock):not(:where(#scheduleView,#scheduleView *)) {
+    background-image:linear-gradient(145deg,rgba(220,233,246,.05),transparent 65%) !important;
+  }
+  html:not([data-skin="liquid"]) body :where(button:not(:disabled):not(.sidebar-backdrop),summary):hover:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--accent-soft) !important; }
+  html:not([data-skin="liquid"]) body :is(
+    .primary-button,.quick-submit,.mobile-smart-submit,.nav-item.active,.view-switch button.active,
+    .segmented button.selected,.auth-tabs button.active,.data-hub-tabs button[aria-selected="true"],
+    .day-strip button.active,.mini-days button.today,.month-day.today > header strong,
+    .schedule-day-head.today strong,.mobile-bottom-nav #mobileNavCreate,.mobile-bottom-nav button.active,
+    .update-banner #applyUpdateBtn,.landscape-schedule-menu[open] summary,.quick-toggle[aria-pressed="true"]
+  ):not(:where(#scheduleView,#scheduleView *)) {
+    background-color:var(--action-fill) !important; color:var(--action-ink) !important;
+    box-shadow:inset 0 2px 3px var(--glass-rim),inset 0 -3px 5px rgba(93,106,120,.15),0 8px 15px -6px rgba(45,48,50,.18) !important;
+  }
+  html:not([data-skin="liquid"]) body :where(button:not(:disabled):not(.sidebar-backdrop)):active:not(:where(#scheduleView,#scheduleView *)) {
+    box-shadow:inset 0 2px 6px rgba(45,48,50,.12),inset 0 -1px 1px var(--glass-rim) !important;
+  }
+  html:not([data-skin="liquid"]) body .complete-btn.completed:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--action-fill) !important; color:var(--ink) !important; }
+  /* Smooth inset record surfaces contrast with the fiber of their parent. */
+  html:not([data-skin="liquid"]) body :is(.focus-task,.task-card,.list-row,.project-card):not(:where(#scheduleView,#scheduleView *)) {
+    background-color:var(--card); border-color:var(--glass-rim);
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.22),0 3px 9px rgba(45,48,50,.035);
+  }
+  html:not([data-skin="liquid"]) body .focus-task.pinned:not(:where(#scheduleView,#scheduleView *)) { border-color:var(--accent); box-shadow:inset 3px 0 var(--accent); }
+  html:not([data-skin="liquid"]) body :is(.today-inbox-button strong,.nav-count):not(:where(#scheduleView,#scheduleView *)) { background:var(--accent-soft); color:var(--ink); }
+  html:not([data-skin="liquid"]) body :is(.mobile-menu,.icon-button) { border-radius:50% !important; }
+  html:not([data-skin="liquid"]) body .sidebar-backdrop:not(:where(#scheduleView,#scheduleView *)) { background:rgba(20,27,35,.28); }
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+    html:not([data-skin="liquid"]) body { --chrome:#e5e5e4 !important; --action-fill:#bdc4ca !important; }
+    html:not([data-skin="liquid"]) body.dark { --chrome:#3b4552 !important; --action-fill:#4f6074 !important; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    html:not([data-skin="liquid"]) body :where(button,summary,input,textarea,select) { transition:none !important; }
+  }
+  @media (forced-colors:active) {
+    html:not([data-skin="liquid"]) body,html:not([data-skin="liquid"]) body.dark {
+      --chrome:ButtonFace !important; --ink:CanvasText !important; --glass-rim:ButtonText !important;
+      --action-fill:Highlight !important; --action-ink:HighlightText !important; --material-shadow:none !important;
+    }
+    html:not([data-skin="liquid"]) body :where(button,summary,.quick-add,.mobile-bottom-nav,.live-clock):not(:where(#scheduleView,#scheduleView *)) { background-image:none !important; }
+  }
+}
+
+/* Desktop framing follows the supplied reference; the mobile app shell and
+   the calendar's dedicated full-height canvas retain their layout contract. */
+@media (min-width:961px) and (pointer:fine) {
+  body:not([data-active-view="schedule"]):not(.admin-mode) .app-shell {
+    grid-template-columns:278px minmax(0,1fr); gap:20px; padding:38px 28px;
+  }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar {
+    top:38px; height:calc(100dvh - 76px); padding:28px 20px 20px;
+    border:1px solid var(--xuan-edge); border-radius:22px;
+  }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .main-content { padding:6px 0 100px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .topbar {
+    height:98px; padding:18px; border:1px solid var(--xuan-edge); border-radius:22px;
+  }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .brand { padding:6px 5px 32px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .brand span { font-size:12px; letter-spacing:.02em; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .brand-mark { width:40px; height:40px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .main-nav { gap:8px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .nav-item { min-height:50px; border:1px solid var(--glass-rim); border-radius:17px; gap:8px; font-size:17px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-note { padding:18px; margin: auto 0 14px; border-radius:18px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-note p { font-family:inherit; font-size:13px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-actions { padding:0; gap:10px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-action { min-height:47px; font-size:13px; border-radius:15px; padding:10px 14px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .topbar .date-line { font-size:12px; letter-spacing:.02em; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .topbar :is(.mobile-menu,.icon-button) { width:50px; height:50px; flex-basis:50px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .topbar .primary-button { min-height:50px; border-radius:18px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock { border:1px solid var(--glass-rim); border-radius:17px; min-height:44px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock strong { font-size:18px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock span { font-size:11px; }
+  body .today-workspace { width:100%; padding:30px 30px 20px; gap:14px; }
+  body .today-heading { padding:4px 6px 2px; }
+  body .today-heading h2 { font-size:32px; }
+  body .today-heading p { font-size:15px; }
+  body :is(.today-next,.today-section) { padding:24px 30px; border-radius:22px; }
+  body .today-next { min-height:108px; }
+  body .today-next :is(p,span) { font-size:14px; }
+  body .today-section-title h3 { font-size:20px; }
+  body .today-workspace .eyebrow { font-size:12px; letter-spacing:.09em; }
+  body .today-workspace .today-next > .eyebrow { font-size:18px; letter-spacing:0; }
+  body .today-workspace .today-next > .eyebrow:not(:where(#scheduleView,#scheduleView *)) { color:var(--ink); }
+  body .focus-task { min-height:72px; padding:12px 18px; grid-template-columns:34px minmax(0,1fr) auto; gap:15px; border-radius:16px; }
+  body .focus-task .complete-btn { width:30px; height:30px; }
+  body .focus-task-main strong { font-size:16px; }
+  body .focus-task-main span { font-size:14px; }
+  body .focus-actions { gap:12px; }
+  body .focus-actions button { min-height:38px; padding:7px 16px; border-radius:13px; font-size:14px; }
+  body .today-section-title .text-button { padding:8px 18px; border-radius:14px; font-size:14px; }
+  body .today-inbox-button { border-radius:17px; padding:10px 18px; }
+  body .today-section .today-empty { font-size:14px; }
+  body .today-section .today-empty:not(:where(#scheduleView,#scheduleView *)) { background:transparent; border:0; color:var(--muted); }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .quick-add {
+    left:352px; right:34px; bottom:28px; width:auto; max-width:none; transform:none;
+    border:1px solid var(--glass-rim); border-radius:24px; padding:12px;
+  }
+  body .quick-add .quick-input { border-radius:16px; }
+}
+html body .preview-classic:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--xuan-base); background-image:var(--xuan-image); background-size:var(--xuan-size); }
+html body .preview-classic i:not(:where(#scheduleView,#scheduleView *)) { background:var(--chrome); border-color:var(--glass-rim); box-shadow:var(--material-shadow); }
+html body .preview-classic i:first-child:not(:where(#scheduleView,#scheduleView *)) { background:var(--action-fill); }
+@media (min-width:961px) and (max-width:1199px) and (pointer:fine) {
+  body:not([data-active-view="schedule"]):not(.admin-mode) .app-shell { grid-template-columns:236px minmax(0,1fr); padding:20px; gap:16px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar { top:20px; height:calc(100dvh - 40px); padding:22px 14px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .quick-add { left:280px; right:28px; bottom:20px; }
+  body .today-workspace { padding:22px 10px; }
+  body :is(.today-next,.today-section) { padding:18px; }
+  body .focus-actions { gap:6px; }
+  body .focus-actions button { padding:6px 10px; }
+}
+
+/* One transient light sheet shared by both skins. Keeping this independent of
+   positioning styles lets existing sticky/fixed controls retain their geometry. */
+:where(.material-light-host) { position:relative; }
+.material-light-relative { position:relative !important; }
+.material-light {
+  --light-opacity:1;
+  position:absolute; inset:0; z-index:2; border-radius:inherit;
+  pointer-events:none; overflow:hidden; contain:paint;
+  background:radial-gradient(ellipse 420px 240px at var(--light-x,50%) var(--light-y,0%),rgba(255,255,255,.16),transparent 78%);
+  animation:material-light-enter .3s ease-out both;
+}
+.material-light-rim {
+  position:absolute; inset:0; border-radius:inherit; padding:1.5px;
+  background:radial-gradient(ellipse at var(--light-x,50%) var(--light-y,0%),rgba(255,255,255,.98),rgba(255,255,255,.14) 45%,transparent 72%);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask-composite:exclude;
+}
+.material-light-glass {
+  background:radial-gradient(ellipse 85% 130% at var(--light-x,50%) var(--light-y,0%),rgba(255,255,255,.32),transparent 70%);
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.8),inset 0 -2px 6px rgba(101,126,154,.12);
+}
+.material-light-glass .material-light-rim { padding:2px; }
+body.dark .material-light { --light-opacity:.55; }
+@keyframes material-light-enter { from { opacity:0; } to { opacity:var(--light-opacity); } }
+@media (prefers-reduced-motion:reduce), (forced-colors:active) {
+  .material-light { display:none !important; animation:none !important; }
+}
+html[data-skin="liquid"] body:not(.dark) {
+  --material-shadow:inset 0 2px 3px rgba(255,255,255,.88),inset 2px 0 4px rgba(255,255,255,.30),inset 0 -3px 5px rgba(95,121,150,.14),0 8px 16px -6px rgba(45,60,80,.19);
+}

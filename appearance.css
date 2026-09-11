@@ -1,3 +1,5 @@
+/* Calendar paint belongs to calendar-surface.css; shared appearance
+   controls below exclude #scheduleView while geometry remains shared. */
 /* Shared component contract. Layout and business state stay in the existing sheets.
    New skins override tokens; do not duplicate pages or event handlers. */
 :root {
@@ -13,50 +15,66 @@
   --paper-shadow:var(--shadow);
   --glass-rim:rgba(255,255,255,.65);
 }
-.complete-btn.completed { background:#9a9d9c; border-color:#9a9d9c; color:#f5f5f4; }
+/* Refined classic light surfaces; keep other skins and dark mode independent. */
+html:not([data-skin="liquid"]) body:not(.dark) {
+  --card:#e5e2e0;
+  --shadow:-4px -4px 12px rgba(255,255,255,.24),4px 8px 20px rgba(45,48,50,.08);
+  background-color:#e6e2dd;
+  background-image:radial-gradient(ellipse 100% 100% at left bottom,rgba(230,226,221,.18),rgba(230,226,221,0) 70%),
+    linear-gradient(180deg,#e6e2dd 0%,#acabaa 100%);
+  background-attachment:fixed;
+  background-repeat:no-repeat;
+}
+html:not([data-skin="liquid"]) body:not(.dark) .topbar:not(:where(#scheduleView,#scheduleView *)) {
+  background:#e4dfdc;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.4),-3px -3px 10px rgba(255,255,255,.24),0 4px 12px rgba(45,48,50,.06);
+}
+.complete-btn.completed:not(:where(#scheduleView,#scheduleView *)) { background:#9a9d9c; border-color:#9a9d9c; color:#f5f5f4; }
 html { color-scheme:light; }
 html[data-mode="dark"] { color-scheme:dark; }
 .field { min-width:0; align-content:start; }
 .form-grid { align-items:start; }
 .field input:not([type="checkbox"]):not([type="radio"]), .field select, .field textarea {
-  min-width:0; min-height:var(--control-height); border-radius:var(--control-radius);
-  font-size:14px; line-height:1.5; padding:10px 12px; color:var(--ink); background-color:var(--card);
-}
-.field select, .smart-field select, select {
-  appearance:none; -webkit-appearance:none; min-height:var(--control-height);
-  padding:10px 36px 10px 12px; border:1px solid var(--line); border-radius:var(--control-radius);
+  min-width:0; min-height:var(--control-height);
+  font-size:14px; line-height:1.5; padding:10px 12px; }
+.field input:not([type="checkbox"]):not([type="radio"]):not(:where(#scheduleView,#scheduleView *)), .field select:not(:where(#scheduleView,#scheduleView *)), .field textarea:not(:where(#scheduleView,#scheduleView *)) { border-radius:var(--control-radius); color:var(--ink); background-color:var(--card); }
+.field select, .smart-field select, select { min-height:var(--control-height);
+  padding:10px 36px 10px 12px; }
+.field select:not(:where(#scheduleView,#scheduleView *)), .smart-field select:not(:where(#scheduleView,#scheduleView *)), select:not(:where(#scheduleView,#scheduleView *)) {
+  appearance:none; -webkit-appearance:none; border:1px solid var(--line); border-radius:var(--control-radius);
   color:var(--ink); background-color:var(--card);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23657079' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat; background-position:right 12px center; background-size:16px;
-}
-.field input[type="checkbox"], .field input[type="radio"], input[type="checkbox"], input[type="radio"] {
-  appearance:auto; width:18px; height:18px; min-height:18px; flex:0 0 18px;
-  margin:0; padding:0; accent-color:var(--accent); box-shadow:none;
-}
+  background-repeat:no-repeat; background-position:right 12px center; background-size:16px; }
+.field input[type="checkbox"], .field input[type="radio"], input[type="checkbox"], input[type="radio"] { width:18px; height:18px; min-height:18px; flex:0 0 18px;
+  margin:0; padding:0; accent-color:var(--accent); }
+.field input[type="checkbox"]:not(:where(#scheduleView,#scheduleView *)), .field input[type="radio"]:not(:where(#scheduleView,#scheduleView *)), input[type="checkbox"]:not(:where(#scheduleView,#scheduleView *)), input[type="radio"]:not(:where(#scheduleView,#scheduleView *)) {
+  appearance:auto; box-shadow:none; }
 .switch-label, .alarm-mode-field .switch-label { display:flex; align-items:center; gap:10px; min-height:44px; }
 .field > span { font-size:12px; line-height:1.5; }
 .field-hint { line-height:1.6; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
   outline:2px solid var(--accent); outline-offset:3px;
 }
-input::placeholder, textarea::placeholder { color:var(--muted); opacity:.85; }
-button:disabled { cursor:not-allowed; opacity:.5; }
+input:not(:where(#scheduleView,#scheduleView *))::placeholder, textarea:not(:where(#scheduleView,#scheduleView *))::placeholder { color:var(--muted); opacity:.85; }
+button:disabled { cursor:not-allowed; }
+button:disabled:not(:where(#scheduleView,#scheduleView *)) { opacity:.5; }
 .close-button { min-width:40px; min-height:40px; }
 /* Keep filled actions readable in either mode, independently of link/accent ink. */
-.primary-button, .quick-submit, .nav-item.active, .segmented button.selected,
-.view-switch button.active, .today-progress { background:var(--action-fill); color:var(--action-ink); }
+.primary-button:not(:where(#scheduleView,#scheduleView *)), .quick-submit:not(:where(#scheduleView,#scheduleView *)), .nav-item.active:not(:where(#scheduleView,#scheduleView *)), .segmented button.selected:not(:where(#scheduleView,#scheduleView *)),
+.view-switch button.active:not(:where(#scheduleView,#scheduleView *)), .today-progress:not(:where(#scheduleView,#scheduleView *)) { background:var(--action-fill); color:var(--action-ink); }
 body.dark { --action-fill:#777a79; --action-ink:#f0efed; }
 .skin-options { border:0; margin:0 0 24px; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .skin-options legend { margin-bottom:12px; font-size:12px; font-weight:600; }
 .skin-option { position:relative; display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:16px; cursor:pointer; }
 .skin-option input { position:absolute; right:18px; top:18px; z-index:1; }
-.skin-option:has(:checked) { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
-.skin-option strong { font-size:14px; }.skin-option small { color:var(--muted); font-size:12px; line-height:1.5; }
+.skin-option:has(:checked):not(:where(#scheduleView,#scheduleView *)) { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+.skin-option strong { font-size:14px; }.skin-option small { font-size:12px; line-height:1.5; }.skin-option small:not(:where(#scheduleView,#scheduleView *)) { color:var(--muted); }
 .skin-preview { height:100px; display:grid; grid-template-columns:24px 1fr; gap:8px; padding:16px; border-radius:10px; }
-.skin-preview i { background:#fffefb; border:1px solid #d9ddd8; border-radius:5px; }
-.skin-preview i:first-child { grid-row:span 2; background:#344f42; }
-.preview-classic { background:#edeae2; }.preview-liquid { background:linear-gradient(135deg,#d6e0e4,#f0f4f5); }
-.preview-liquid i { background:rgba(255,255,255,.5); box-shadow:inset 0 1px 1px white,0 4px 12px #63778720; border-radius:8px; }
+.skin-preview i:not(:where(#scheduleView,#scheduleView *)) { background:#fffefb; border:1px solid #d9ddd8; border-radius:5px; }
+.skin-preview i:first-child { grid-row:span 2; }
+.skin-preview i:first-child:not(:where(#scheduleView,#scheduleView *)) { background:#344f42; }
+.preview-classic:not(:where(#scheduleView,#scheduleView *)) { background:#edeae2; }.preview-liquid:not(:where(#scheduleView,#scheduleView *)) { background:linear-gradient(135deg,#d6e0e4,#f0f4f5); }
+.preview-liquid i:not(:where(#scheduleView,#scheduleView *)) { background:rgba(255,255,255,.5); box-shadow:inset 0 1px 1px white,0 4px 12px #63778720; border-radius:8px; }
 .appearance-footer { display:flex; justify-content:flex-end; margin-top:24px; }
 @media (min-width:961px) and (pointer:fine) { body .sidebar .sidebar-close { display:none; } }
 /* Admin hides utility actions; appearance remains available without exposing account actions. */
@@ -74,7 +92,7 @@ body.admin-mode .sidebar-actions > :not(#appearanceSettingsBtn) { display:none; 
 }
 @media (forced-colors:active) {
   .liquid-lens,.skin-preview { display:none; } .skin-option:has(:checked) { outline:2px solid Highlight; }
-  .field select, select { appearance:auto; background-image:none; }
+  .field select:not(:where(#scheduleView,#scheduleView *)), select:not(:where(#scheduleView,#scheduleView *)) { appearance:auto; background-image:none; }
 }
 @media (max-width:720px) { .field input:not([type="checkbox"]):not([type="radio"]),.field select,.field textarea { font-size:16px; } }
 /* These selected states also repair classic dark mode. */
@@ -82,70 +100,74 @@ html body :is(.primary-button,.quick-submit,.mobile-smart-submit,.today-progress
   .nav-item.active,.view-switch button.active,.segmented button.selected,.auth-tabs button.active,
   .data-hub-tabs button[aria-selected="true"],.day-strip button.active,.mini-days button.today,
   .month-day.today > header strong,.schedule-day-head.today strong,.mobile-bottom-nav #mobileNavCreate,
-  .update-banner #applyUpdateBtn,.landscape-schedule-menu[open] summary) {
+  .update-banner #applyUpdateBtn,.landscape-schedule-menu[open] summary):not(:where(#scheduleView,#scheduleView *)) {
   color:var(--action-ink); background:var(--action-fill); border-color:var(--action-fill);
 }
-html:not([data-skin="liquid"]) body .nav-item.active { color:var(--ink); background:#d8d7d7; border-color:#d8d7d7; box-shadow:inset 0 3px 8px rgba(45,48,50,.1),inset 0 -1px 2px rgba(255,255,255,.32); }
-html body :is(.icon-button,.mobile-menu,.complete-btn,.project-action-check) { box-shadow:inset 0 2px 5px rgba(45,48,50,.06); }
-html body :is(.segmented button.selected,.view-switch button.active,.quick-toggle[aria-pressed="true"]) { box-shadow:inset 0 3px 7px rgba(45,48,50,.1); }
-html body .quick-toggle[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
-html body .nav-item:not(.active) { color:var(--muted); }
-html body .mobile-matrix-tabs button.active {
+html:not([data-skin="liquid"]) body .nav-item.active:not(:where(#scheduleView,#scheduleView *)) { color:var(--ink); background:#d8d7d7; border-color:#d8d7d7; box-shadow:inset 0 3px 8px rgba(45,48,50,.1),inset 0 -1px 2px rgba(255,255,255,.32); }
+html body :is(.icon-button,.mobile-menu,.complete-btn,.project-action-check):not(:where(#scheduleView,#scheduleView *)) { box-shadow:inset 0 2px 5px rgba(45,48,50,.06); }
+html body :is(.segmented button.selected,.view-switch button.active,.quick-toggle[aria-pressed="true"]):not(:where(#scheduleView,#scheduleView *)) { box-shadow:inset 0 3px 7px rgba(45,48,50,.1); }
+html body .quick-toggle[aria-pressed="true"]:not(:where(#scheduleView,#scheduleView *)) { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+html body .nav-item:not(.active):not(:where(#scheduleView,#scheduleView *)) { color:var(--muted); }
+html body .mobile-matrix-tabs button.active:not(:where(#scheduleView,#scheduleView *)) {
   color:var(--quadrant-color,var(--accent)); background:var(--surface);
   border-color:var(--quadrant-color,var(--accent)); box-shadow:inset 0 -3px 0 var(--quadrant-color,var(--accent));
 }
 /* Standard form contract also reaches smart parsing, subscription URLs and slots. */
 html body :is(.smart-field input,.smart-field select,.calendar-subscription-url input,.time-slot-row input) {
-  min-width:0; min-height:var(--control-height); border:1px solid var(--line); border-radius:var(--control-radius);
-  padding:10px 12px; color:var(--ink); background-color:var(--card); font-size:14px; line-height:1.5;
-}
+  min-width:0; min-height:var(--control-height);
+  padding:10px 12px; font-size:14px; line-height:1.5; }
+
+html body :is(.smart-field input,.smart-field select,.calendar-subscription-url input,.time-slot-row input):not(:where(#scheduleView,#scheduleView *)) { border:1px solid var(--line); border-radius:var(--control-radius); color:var(--ink); background-color:var(--card); }
 html body .smart-field select { padding-right:36px; }
-html body :is(select,.field select,.smart-field select) { background-repeat:no-repeat; background-position:right 12px center; background-size:16px; }
-html body select[multiple] { appearance:auto; background-image:none; padding:10px 12px; }
-html body :is(.smart-field input,.smart-field select,.calendar-subscription-url input,.time-slot-row input):focus-visible {
-  border-color:var(--accent); outline:2px solid var(--accent); outline-offset:2px;
-}
-input[type="file"] { max-width:100%; color:var(--muted); font-size:12px; }
+html body :is(select,.field select,.smart-field select):not(:where(#scheduleView,#scheduleView *)) { background-repeat:no-repeat; background-position:right 12px center; background-size:16px; }
+html body select[multiple] { padding:10px 12px; }
+html body select[multiple]:not(:where(#scheduleView,#scheduleView *)) { appearance:auto; background-image:none; }
+html body :is(.smart-field input,.smart-field select,.calendar-subscription-url input,.time-slot-row input):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+html body :is(.smart-field input,.smart-field select,.calendar-subscription-url input,.time-slot-row input):focus-visible:not(:where(#scheduleView,#scheduleView *)) {
+  border-color:var(--accent); }
+input[type="file"] { max-width:100%; font-size:12px; }
+input[type="file"]:not(:where(#scheduleView,#scheduleView *)) { color:var(--muted); }
 input[type="file"]::file-selector-button {
-  min-height:40px; margin:6px 10px 6px 0; padding:8px 12px; border:1px solid var(--line); border-radius:var(--control-radius);
-  background:var(--chrome); color:var(--accent); font:inherit; cursor:pointer; box-shadow:var(--material-shadow);
-}
-input:disabled,select:disabled,textarea:disabled { opacity:.6; cursor:not-allowed; }
-input[readonly],textarea[readonly] { background-color:var(--surface); }
-input[aria-invalid="true"],textarea[aria-invalid="true"],select[aria-invalid="true"],
-input:user-invalid,textarea:user-invalid,select:user-invalid { border-color:var(--q1); }
-html body :is(.field,.smart-field):focus-within > span:first-child { color:var(--accent); }
-html body .field:has(input[type="checkbox"]) input { box-shadow:none; }
-.inline-add:focus-visible,.quadrant:focus-within .inline-add { opacity:1; }
-.identity-tag { color:var(--ink); border-left:2px solid var(--identity-color); background:color-mix(in srgb,var(--identity-color) 10%,var(--card)); }
-html[data-mode="dark"] select {
+  min-height:40px; margin:6px 10px 6px 0; padding:8px 12px; font:inherit; cursor:pointer; }
+input[type="file"]:not(:where(#scheduleView,#scheduleView *))::file-selector-button { border:1px solid var(--line); border-radius:var(--control-radius);
+  background:var(--chrome); color:var(--accent); box-shadow:var(--material-shadow); }
+input:disabled,select:disabled,textarea:disabled { cursor:not-allowed; }
+input:disabled:not(:where(#scheduleView,#scheduleView *)),select:disabled:not(:where(#scheduleView,#scheduleView *)),textarea:disabled:not(:where(#scheduleView,#scheduleView *)) { opacity:.6; }
+input[readonly]:not(:where(#scheduleView,#scheduleView *)),textarea[readonly]:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--surface); }
+input[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),textarea[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),select[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),
+input:user-invalid:not(:where(#scheduleView,#scheduleView *)),textarea:user-invalid:not(:where(#scheduleView,#scheduleView *)),select:user-invalid:not(:where(#scheduleView,#scheduleView *)) { border-color:var(--q1); }
+html body :is(.field,.smart-field):focus-within > span:first-child:not(:where(#scheduleView,#scheduleView *)) { color:var(--accent); }
+html body .field:has(input[type="checkbox"]) input:not(:where(#scheduleView,#scheduleView *)) { box-shadow:none; }
+.inline-add:focus-visible:not(:where(#scheduleView,#scheduleView *)),.quadrant:focus-within .inline-add:not(:where(#scheduleView,#scheduleView *)) { opacity:1; }
+.identity-tag:not(:where(#scheduleView,#scheduleView *)) { color:var(--ink); border-left:2px solid var(--identity-color); background:color-mix(in srgb,var(--identity-color) 10%,var(--card)); }
+html[data-mode="dark"] select:not(:where(#scheduleView,#scheduleView *)) {
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23adb9bf' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 /* Small circular controls retain their shape and predictable hit area. */
-html body :is(.complete-btn,.project-action-check) { border-color:color-mix(in srgb,var(--muted) 65%,var(--line)); }
-html body .complete-btn:hover { border-color:var(--accent); background:var(--accent-soft); }
-html body .calendar-week-head.today { color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 -2px 0 var(--accent); }
+html body :is(.complete-btn,.project-action-check):not(:where(#scheduleView,#scheduleView *)) { border-color:color-mix(in srgb,var(--muted) 65%,var(--line)); }
+html body .complete-btn:hover:not(:where(#scheduleView,#scheduleView *)) { border-color:var(--accent); background:var(--accent-soft); }
+html body .calendar-week-head.today:not(:where(#scheduleView,#scheduleView *)) { color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 -2px 0 var(--accent); }
 /* Short events keep the title before optional location metadata. */
 html body .calendar-week-event { gap:1px; container:calendar-event / size; }
 html body .calendar-week-event :is(time,strong) { flex-shrink:0; line-height:1.2; }
 html body .calendar-week-event span { min-height:0; overflow:hidden; line-height:1.2; }
-html body .calendar-week-event.past { opacity:.78; }
+html body .calendar-week-event.past:not(:where(#scheduleView,#scheduleView *)) { opacity:.78; }
 @container calendar-event (max-height:48px) { .calendar-week-event > span { display:none; } }
 @container calendar-event (max-height:26px) { .calendar-week-event > time { display:none; } }
-html body .mini-days button.has-course:not(.today)::after { background:var(--q3); }
+html body .mini-days button.has-course:not(.today):not(:where(#scheduleView,#scheduleView *))::after { background:var(--q3); }
 /* Project identity is kept separately from text and filled action contrast. */
 html body .project-card { --project-soft:color-mix(in srgb,var(--project) 12%,var(--surface)); }
-html body .project-card :is(time,.project-status,.project-progress-head strong,.project-edit-button) { color:var(--ink); }
-html body .project-card.risk { border-top-color:var(--q2); }
-html body .project-card.overdue { border-top-color:var(--q1); }
-html body .project-card.risk .project-status { color:var(--q2); background:var(--q2-soft); }
-html body .project-card.overdue .project-status { color:var(--q1); background:var(--q1-soft); }
-html body #projectsView .project-next-button { background:var(--action-fill); color:var(--action-ink); border:1px solid var(--action-fill); }
-html body .project-check-row.completed i { background:var(--action-fill); color:var(--action-ink); }
-html body .deadline-chip time,html body .mini-days button.has-ddl i { background:var(--q1-soft); color:var(--q1); }
-html body .deadline-chip.today time { background:var(--q3-soft); color:var(--q3); }
-html body .deadline-chip.soon time { background:var(--q2-soft); color:var(--q2); }
-html body .deadline-chip.soon { border-color:var(--q2); }
+html body .project-card :is(time,.project-status,.project-progress-head strong,.project-edit-button):not(:where(#scheduleView,#scheduleView *)) { color:var(--ink); }
+html body .project-card.risk:not(:where(#scheduleView,#scheduleView *)) { border-top-color:var(--q2); }
+html body .project-card.overdue:not(:where(#scheduleView,#scheduleView *)) { border-top-color:var(--q1); }
+html body .project-card.risk .project-status:not(:where(#scheduleView,#scheduleView *)) { color:var(--q2); background:var(--q2-soft); }
+html body .project-card.overdue .project-status:not(:where(#scheduleView,#scheduleView *)) { color:var(--q1); background:var(--q1-soft); }
+html body #projectsView .project-next-button:not(:where(#scheduleView,#scheduleView *)) { background:var(--action-fill); color:var(--action-ink); border:1px solid var(--action-fill); }
+html body .project-check-row.completed i:not(:where(#scheduleView,#scheduleView *)) { background:var(--action-fill); color:var(--action-ink); }
+html body .deadline-chip time:not(:where(#scheduleView,#scheduleView *)),html body .mini-days button.has-ddl i:not(:where(#scheduleView,#scheduleView *)) { background:var(--q1-soft); color:var(--q1); }
+html body .deadline-chip.today time:not(:where(#scheduleView,#scheduleView *)) { background:var(--q3-soft); color:var(--q3); }
+html body .deadline-chip.soon time:not(:where(#scheduleView,#scheduleView *)) { background:var(--q2-soft); color:var(--q2); }
+html body .deadline-chip.soon:not(:where(#scheduleView,#scheduleView *)) { border-color:var(--q2); }
 html body .sidebar-note[data-tone="danger"] { --tip-color:var(--q1); }
 html body .sidebar-note[data-tone="warning"] { --tip-color:var(--q2); }
 html body .sidebar-note[data-tone="course"] { --tip-color:var(--q3); }
@@ -162,11 +184,11 @@ html body .sidebar-note[data-tone="calm"] { --tip-color:var(--q4); }
 @media (forced-colors:active) {
   html body { --material-shadow:none; --paper-shadow:none; }
   html body :is(.view-switch button.active,.segmented button.selected,.auth-tabs button.active,.data-hub-tabs button[aria-selected="true"],.mobile-matrix-tabs button.active) { outline:2px solid Highlight; outline-offset:-2px; }
-  html[data-mode="dark"] select { background-image:none; }
+  html[data-mode="dark"] select:not(:where(#scheduleView,#scheduleView *)) { background-image:none; }
 }
 /* The policy shares palette and type, but remains a scrolling document on phones. */
 html:has(body.privacy-page) { height:auto; overflow:auto; }
 html body.privacy-page { display:block; height:auto; min-height:100dvh; overflow:visible; padding:24px 16px 60px; font-size:15px; line-height:1.75; }
-html body.privacy-page main { background:var(--card); box-shadow:var(--paper-shadow); }
+html body.privacy-page main:not(:where(#scheduleView,#scheduleView *)) { background:var(--card); box-shadow:var(--paper-shadow); }
 html body.privacy-page :is(h1,h2) { font-family:Georgia,"STSong",serif; font-weight:500; }
 @media (max-width:600px) { html body.privacy-page { padding:0; } }

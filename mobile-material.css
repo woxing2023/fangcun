@@ -1,0 +1,237 @@
+/* Touch paper and glass. Geometry belongs to mobile-ui/mobile-calendar.
+   A few shared chrome surfaces capture the backdrop; the timetable paints
+   cached fiber, color and edge recipes. touch-material.js owns live optics. */
+@layer mobile-material {
+  html[data-material-performance="touch"] body {
+    --bg:#dce0e3 !important; --surface:#f4f2ed !important; --card:#f7f7f5 !important;
+    --ink:#263447 !important; --muted:#66717e !important;
+    --accent:#47679f !important; --accent-soft:#e1e8f3 !important;
+    --line:rgba(114,127,144,.18) !important;
+    --action-fill:#47679f !important; --action-ink:#fff !important;
+    --q1:#a84c59 !important; --q1-soft:#f3e3e5 !important;
+    --q2:#927039 !important; --q2-soft:#f0e8d9 !important;
+    --q3:#456f9f !important; --q3-soft:#e0eaf4 !important;
+    --q4:#7b638e !important; --q4-soft:#eae3f0 !important;
+    --mobile-glass:rgba(246,249,252,.62);
+    --mobile-glass-edge:rgba(255,255,255,.82);
+    --mobile-glass-top:rgba(255,255,255,.86);
+    --mobile-glass-bottom:rgba(142,158,182,.15);
+    --mobile-glass-shadow:inset 0 1px 0 rgba(255,255,255,.92),inset 0 -1px 0 rgba(99,119,144,.13),0 3px 8px -4px rgba(40,59,82,.21);
+    --mobile-panel-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(121,129,139,.14),0 8px 20px -13px rgba(39,52,70,.28);
+    --mobile-record-shadow:inset 0 1px 0 rgba(255,255,255,.88),inset 0 -1px 0 rgba(102,119,143,.13),0 2px 4px -1px rgba(37,55,76,.13);
+    --mobile-record-top:rgba(255,255,255,.69);
+    --mobile-record-bottom:rgba(137,157,182,.055);
+    --mobile-record-base:#f5f7fa;
+    --mobile-tick:#efefeb;
+    --chrome:var(--mobile-glass) !important;
+    --glass-rim:var(--mobile-glass-edge) !important;
+    --material-blur:none !important;
+    --material-shadow:var(--mobile-glass-shadow) !important;
+    --liquid-fill:var(--mobile-glass) !important; --liquid-panel:var(--mobile-glass) !important;
+    --liquid-paper:var(--card) !important; --liquid-dialog:rgba(239,244,250,.92) !important;
+    --liquid-selected:var(--accent-soft) !important; --liquid-edge:var(--line) !important;
+    --liquid-hover:rgba(224,234,247,.74) !important; --liquid-pressed:rgba(214,226,243,.85) !important;
+    --xuan-base:#f2efe8 !important; --xuan-ink:var(--ink) !important; --xuan-muted:var(--muted) !important;
+    --xuan-edge:rgba(255,255,255,.78) !important;
+    --xuan-shadow:inset 0 1px 0 rgba(255,255,255,.94),inset 0 -2px 0 rgba(122,115,101,.08),0 5px 12px -6px rgba(42,46,50,.18) !important;
+    /* Original SVG baked at 720px: shared transparent PNG, 360 CSS px at DPR 2. */
+    --mobile-paper-image:url("xuan-fibers-mobile.png?v=1");
+    --xuan-image:var(--mobile-paper-image),linear-gradient(132deg,rgba(255,255,255,.64),transparent 48%,rgba(155,148,132,.085)) !important;
+    --xuan-size:360px 360px,100% 100% !important; --xuan-blend:normal,normal !important;
+    background:radial-gradient(ellipse at 8% 2%,rgba(255,255,255,.78),transparent 55%),radial-gradient(ellipse at 96% 70%,rgba(119,143,174,.12),transparent 60%),var(--bg) !important;
+  }
+  html[data-material-performance="touch"][data-skin="liquid"] body {
+    --xuan-base:#eff0ec !important; --mobile-tick:#edf0f1;
+    --mobile-glass:rgba(235,244,255,.61); --mobile-glass-bottom:rgba(112,151,197,.16);
+  }
+  html[data-material-performance="touch"] body.dark {
+    --bg:#202834 !important; --surface:#303640 !important; --card:#35414f !important;
+    --ink:#ecf0f5 !important; --muted:#b2becd !important;
+    --accent:#b0c8ed !important; --accent-soft:#3a4c68 !important;
+    --line:rgba(185,202,224,.13) !important;
+    --action-fill:#87a6d4 !important; --action-ink:#172b46 !important;
+    --q1:#e1a1ad !important; --q1-soft:#4e3742 !important;
+    --q2:#dbc297 !important; --q2-soft:#474236 !important;
+    --q3:#a0c0e4 !important; --q3-soft:#33455d !important;
+    --q4:#c5b2da !important; --q4-soft:#423b53 !important;
+    --mobile-glass:rgba(53,70,91,.65); --mobile-glass-edge:rgba(197,215,239,.23);
+    --mobile-glass-top:rgba(180,203,233,.16); --mobile-glass-bottom:rgba(8,17,32,.24);
+    --mobile-glass-shadow:inset 0 1px 0 rgba(213,229,249,.23),inset 0 -1px 0 rgba(3,10,20,.28),0 3px 8px -3px rgba(0,0,0,.25);
+    --mobile-panel-shadow:inset 0 1px 0 rgba(223,231,246,.17),inset 0 -1px 0 rgba(0,0,0,.25),0 8px 20px -12px rgba(0,0,0,.36);
+    --mobile-record-shadow:inset 0 1px 0 rgba(215,232,253,.24),inset 0 -1px 0 rgba(0,0,0,.23),0 2px 4px -1px rgba(0,0,0,.24);
+    --mobile-record-top:rgba(194,218,246,.12); --mobile-record-bottom:rgba(5,16,32,.08);
+    --mobile-record-base:#334050; --mobile-tick:#2d3540;
+    --liquid-dialog:rgba(40,53,71,.94) !important;
+    --xuan-base:#32363b !important; --xuan-edge:rgba(208,217,231,.18) !important;
+    --xuan-shadow:inset 0 1px 0 rgba(228,226,219,.15),inset 0 -2px 0 rgba(0,0,0,.16),0 5px 12px -6px rgba(0,0,0,.22) !important;
+    --xuan-image:linear-gradient(rgba(35,41,50,.84),rgba(35,41,50,.84)),var(--mobile-paper-image),linear-gradient(135deg,rgba(200,196,181,.07),transparent 55%,rgba(0,0,0,.12)) !important;
+    --xuan-size:100% 100%,360px 360px,100% 100% !important;
+    background:radial-gradient(ellipse at 8% 0,rgba(125,156,197,.13),transparent 64%),var(--bg) !important;
+  }
+  html[data-material-performance="touch"][data-skin="liquid"] body.dark { --xuan-base:#303b49 !important; }
+
+  /* Only named functional hosts reset legacy per-control backdrop captures.
+     The live touch overlay, its canvas and its pseudo-elements are untouched. */
+  html[data-material-performance="touch"] body :where(
+    button,input,textarea,select,summary,a[href],[role="button"],[role="tab"],.skin-option,.import-label,
+    .sidebar,.sidebar-note,.quick-add,.live-clock,.matrix-board,.quadrant,.list-panel,.today-next,.today-section,
+    .today-aside,.today-progress,.project-card,.project-dashboard > div,.admin-card,.admin-stat,.admin-user,.admin-detail,
+    .schedule-board-wrap,.schedule-board,.year-calendar,.month-calendar,.week-calendar,.calendar-week-grid,
+    .mini-month,.overview-day,.overview-summary > div,.reminders-card,.calendar-integration-setting,
+    .calendar-subscription-setting,.smart-preview-card,.smart-source,.smart-time-suggestion,.decision-box,.quadrant-preview,
+    .course-task-actions,.course-linked-panel,.sync-recovery,.update-banner,.view-switch,.calendar-zoom-tools,
+    .data-hub-tabs,.auth-tabs,.segmented,.import-preview,.import-preview-card,.calendar-preset,.calendar-rule,.slot-settings,
+    .task-card,.list-row,.focus-task,.today-class,.today-timeline-row,.today-ddl-row,.day-course-card,.day-task-card,.agenda-course,.overview-course,
+    .modal,.mobile-create-sheet,.liquid-select-menu,.auth-card,.toast,.landscape-schedule-menu > div
+  ) { -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+  html[data-material-performance="touch"] body :where(.topbar,.week-toolbar,.mobile-bottom-nav,dialog[open]) {
+    background:linear-gradient(145deg,var(--mobile-glass-top),transparent 46%,var(--mobile-glass-bottom)),var(--mobile-glass) !important;
+    border-color:var(--mobile-glass-edge) !important;
+    box-shadow:var(--mobile-panel-shadow) !important;
+    -webkit-backdrop-filter:blur(12px) saturate(1.16) !important;
+    backdrop-filter:blur(12px) saturate(1.16) !important;
+  }
+  html[data-material-performance="touch"] body dialog[open] {
+    background-color:var(--liquid-dialog) !important;
+    box-shadow:inset 0 1px 0 var(--mobile-glass-edge),0 18px 48px -16px rgba(9,20,35,.38) !important;
+  }
+  html[data-material-performance="touch"] body dialog::backdrop { background:rgba(13,22,36,.31) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+
+  /* The glass edge is drawn once per control; illumination moves in the
+     shared touch renderer. Color transitions leave text and hit areas fixed. */
+  html[data-material-performance="touch"] body :where(button,summary,[role="button"],[role="tab"],.skin-option,.import-label) {
+    background:linear-gradient(155deg,var(--mobile-glass-top),transparent 49%,var(--mobile-glass-bottom)),var(--mobile-glass) !important;
+    border-color:var(--mobile-glass-edge) !important;
+    box-shadow:var(--mobile-glass-shadow) !important;
+    color:var(--ink) !important;
+    transition:background-color 160ms ease,color 160ms ease !important;
+    text-shadow:none !important;
+  }
+  html[data-material-performance="touch"] body :where(input,textarea,select) {
+    background-color:var(--mobile-glass) !important;
+    border-color:var(--mobile-glass-edge) !important;
+    box-shadow:inset 0 1px 3px rgba(57,76,99,.07),0 1px 0 var(--mobile-glass-edge) !important;
+  }
+  html[data-material-performance="touch"] body :where(.view-switch,.calendar-zoom-tools,.data-hub-tabs,.auth-tabs,.segmented) {
+    background:linear-gradient(180deg,rgba(112,134,160,.09),rgba(255,255,255,.08)) !important;
+    border-color:var(--line) !important;
+    box-shadow:inset 0 1px 3px rgba(61,77,96,.065),0 1px 0 var(--mobile-glass-edge) !important;
+  }
+  html[data-material-performance="touch"] body :where(.view-switch button,.calendar-zoom-tools button,.data-hub-tabs button,.auth-tabs button,.segmented button) {
+    background:transparent !important; box-shadow:none !important; color:var(--muted) !important;
+  }
+  html[data-material-performance="touch"] body :where(.liquid-select-menu,.landscape-schedule-menu > div,.auth-card,.toast) {
+    background:linear-gradient(140deg,var(--mobile-glass-top),transparent 65%),var(--liquid-dialog) !important;
+    border-color:var(--mobile-glass-edge) !important;
+    box-shadow:var(--mobile-panel-shadow) !important;
+  }
+
+  /* All paper layers repeat. The dark veil adds a third layer; inheriting
+     the desktop two-layer repeat list would stop the fiber after one tile. */
+  html[data-material-performance="touch"] body :where(
+    .xuan-paper,[data-material="xuan"],.sidebar,.topbar,.sidebar-note,
+    .quadrant,.list-panel,.today-next,.today-section,.today-aside,.today-progress,
+    .project-dashboard > div,.admin-card,.admin-stat,.admin-user,.admin-detail,
+    .schedule-board-wrap,.year-calendar,.month-calendar,.week-calendar,.overview-day,
+    .overview-summary > div,.reminders-card,.calendar-integration-setting,.calendar-subscription-setting,
+    .smart-preview-card,.smart-source,.smart-time-suggestion,.decision-box,.quadrant-preview,
+    .course-task-actions,.course-linked-panel,.sync-recovery,.import-preview,.import-preview-card,
+    .calendar-preset,.calendar-rule,.slot-settings,dialog,.auth-card,.privacy-page main
+  ):not(:where(button,a[href],input,textarea,select,summary,[role="button"],[role="tab"],
+    [contenteditable="true"],[data-task-id],[data-course-id],[data-project-id],[data-calendar-date],[data-material="none"])) {
+    background-repeat:repeat !important;
+  }
+
+  /* One fibrous sheet underneath the whole grid. Transparent tracks avoid
+     the old repeated frosted stripes, while opaque ticks stay legible. */
+  html[data-material-performance="touch"] body .schedule-board-wrap {
+    background-color:var(--xuan-base) !important; background-image:var(--xuan-image) !important;
+    background-size:var(--xuan-size) !important; background-blend-mode:normal !important;
+    border-color:var(--xuan-edge) !important; box-shadow:var(--xuan-shadow) !important;
+  }
+  html[data-material-performance="touch"] body :where(.schedule-board,.week-calendar,.calendar-week-grid,.year-calendar,.month-calendar) {
+    background:transparent !important; box-shadow:none !important;
+  }
+  html[data-material-performance="touch"] body :where(.calendar-time-cell,.calendar-all-day,.schedule-cell,.month-day) {
+    background:transparent !important; border-color:var(--line) !important; border-radius:0 !important;
+    box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+    transition:none !important;
+  }
+  html[data-material-performance="touch"] body :where(.calendar-week-head,.schedule-day-head,.calendar-hour,.calendar-week-corner,.schedule-time,.schedule-corner) {
+    background:linear-gradient(165deg,var(--mobile-glass-top),transparent 65%),var(--mobile-tick) !important;
+    border-color:var(--line) !important; border-radius:0 !important;
+    box-shadow:inset 0 1px 0 var(--mobile-glass-edge) !important;
+    -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  }
+  html[data-material-performance="touch"] body :where(.schedule-cell.today,.calendar-week-head.today,.schedule-day-head.today,.month-day.today) {
+    background-color:color-mix(in srgb,var(--accent) 9%,transparent) !important;
+    color:var(--accent) !important;
+  }
+
+  /* Colored course glass has a fine lit edge and a shallow resting shadow.
+     No course or empty cell captures the backdrop or owns a GPU context. */
+  html[data-material-performance="touch"] body :where(.course-block,.calendar-week-event,.calendar-entry,.calendar-list-item,.day-course-card,.today-class,.agenda-course,.overview-course) {
+    --mobile-record-color:var(--course-color,var(--event-color,var(--accent)));
+    background:linear-gradient(154deg,var(--mobile-record-top),transparent 49%,var(--mobile-record-bottom)),color-mix(in srgb,var(--mobile-record-color) 23%,var(--mobile-record-base)) !important;
+    border-color:color-mix(in srgb,var(--mobile-record-color) 34%,var(--mobile-glass-edge)) !important;
+    border-top-color:color-mix(in srgb,var(--mobile-record-color) 17%,var(--mobile-glass-edge)) !important;
+    border-left-color:color-mix(in srgb,var(--mobile-record-color) 80%,var(--mobile-record-base)) !important;
+    border-radius:10px !important;
+    box-shadow:var(--mobile-record-shadow) !important;
+    color:var(--ink) !important; opacity:1 !important;
+    -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  }
+  html[data-material-performance="touch"] body [data-calendar-layout="overview"] :where(.course-block,.calendar-week-event) { border-radius:7px !important; }
+  html[data-material-performance="touch"] body.dark :where(.course-block,.calendar-week-event,.calendar-entry,.calendar-list-item,.day-course-card,.today-class,.agenda-course,.overview-course) {
+    background:linear-gradient(154deg,var(--mobile-record-top),transparent 49%,var(--mobile-record-bottom)),color-mix(in srgb,var(--mobile-record-color) 30%,var(--mobile-record-base)) !important;
+    border-left-color:color-mix(in srgb,var(--mobile-record-color) 60%,#c5d6ef) !important;
+  }
+  html[data-material-performance="touch"] body :where(.task-card,.list-row,.focus-task,.today-timeline-row,.today-ddl-row,.day-task-card) {
+    background:linear-gradient(150deg,var(--mobile-record-top),transparent 57%),color-mix(in srgb,var(--mobile-record-base) 85%,transparent) !important;
+    border-color:var(--mobile-glass-edge) !important; box-shadow:var(--mobile-record-shadow) !important;
+  }
+  html[data-material-performance="touch"] body :where(.calendar-all-day-item.deadline,.meta-tag.overdue,.deadline-chip time,.today-ddl-row.overdue) {
+    background:linear-gradient(150deg,var(--mobile-record-top),transparent 60%),var(--q1-soft) !important; color:var(--q1) !important;
+  }
+  html[data-material-performance="touch"] body .calendar-list-item.deadline { --mobile-record-color:var(--q1); }
+  html[data-material-performance="touch"] body :where(.course-block.current,.focus-task.pinned) { border-color:var(--accent) !important; }
+
+  /* Navigation is quiet glass with a colored selection and one jewel-like
+     creation action. Geometry and spacing remain in the mobile UI layer. */
+  html[data-material-performance="touch"] body :where(.sidebar .nav-item,.mobile-bottom-nav button) {
+    background:linear-gradient(150deg,rgba(255,255,255,.13),transparent 65%) !important;
+    color:var(--muted) !important; box-shadow:none !important;
+  }
+  html[data-material-performance="touch"] body :where(.nav-item.active,.mobile-bottom-nav button.active,.skin-option:has(:checked),[role="tab"][aria-selected="true"],.view-switch button.active,.segmented button.selected,.auth-tabs button.active,.day-strip button.active,.quick-toggle[aria-pressed="true"]) {
+    background:linear-gradient(150deg,var(--mobile-glass-top),transparent 65%),var(--accent-soft) !important;
+    color:var(--accent) !important; border-color:var(--mobile-glass-edge) !important; box-shadow:var(--mobile-glass-shadow) !important;
+  }
+  html[data-material-performance="touch"] body :where(.primary-button,.quick-submit,.mobile-smart-submit,#mobileNavCreate) {
+    background:linear-gradient(145deg,rgba(220,235,255,.33),transparent 45%,rgba(20,43,80,.14)),var(--action-fill) !important;
+    color:var(--action-ink) !important; border-color:rgba(225,237,255,.48) !important;
+    box-shadow:inset 0 1px 0 rgba(235,244,255,.5),inset 0 -1px 0 rgba(20,39,66,.23),0 4px 9px -3px rgba(45,75,123,.3) !important;
+  }
+  html[data-material-performance="touch"] body :where(.mini-days button.today,.month-day.today > header strong,.schedule-day-head.today strong) {
+    background:linear-gradient(145deg,rgba(232,242,255,.28),transparent 70%),var(--action-fill) !important;
+    color:var(--action-ink) !important; box-shadow:var(--mobile-glass-shadow) !important;
+  }
+  html[data-material-performance="touch"] body :where(.nav-count,.today-inbox-button strong) {
+    background:color-mix(in srgb,var(--accent-soft) 72%,transparent) !important; color:var(--accent) !important;
+    box-shadow:inset 0 1px 0 var(--mobile-glass-edge) !important;
+  }
+  html[data-material-performance="touch"] body :where(button,input,textarea,select,summary,[tabindex]):focus-visible {
+    outline:2px solid var(--accent) !important; outline-offset:2px !important;
+  }
+  @media (forced-colors:active) {
+    html[data-material-performance="touch"] body,html[data-material-performance="touch"] body.dark {
+      --bg:Canvas !important; --surface:Canvas !important; --card:Canvas !important;
+      --ink:CanvasText !important; --muted:CanvasText !important; --accent:Highlight !important;
+      --accent-soft:Canvas !important; --action-fill:Highlight !important; --action-ink:HighlightText !important;
+      --line:CanvasText !important; --xuan-image:none !important;
+    }
+    html[data-material-performance="touch"] body :where(.topbar,.week-toolbar,.mobile-bottom-nav,dialog[open],.schedule-board-wrap,.course-block,.calendar-week-event,.calendar-list-item) {
+      background:Canvas !important; color:CanvasText !important; border-color:CanvasText !important;
+      box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+    }
+  }
+}

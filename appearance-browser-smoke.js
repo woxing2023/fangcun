@@ -10,7 +10,7 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
     const name = new URL(req.url,'http://localhost').pathname;
     const file = path.join(__dirname,name === '/' ? 'index.html' : name);
     if (!file.startsWith(__dirname + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404).end(); return; }
-    res.setHeader('Content-Type',file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');
+    res.setHeader('Content-Type',file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.woff2') ? 'font/woff2' : 'text/html');
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
@@ -52,7 +52,9 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         await page.waitForTimeout(400);
         const states=await page.locator(selector).evaluateAll(elements=>elements.map(el=>{
           const probe=document.createElement('span');
-          probe.style.cssText='background:var(--action-fill);color:var(--action-ink)';el.append(probe);
+          const calendar=Boolean(el.closest('#scheduleView'));
+          const glass=document.documentElement.dataset.materialPerformance==='touch' && el.matches('.view-switch button.active,.day-strip button.active');
+          probe.style.cssText=calendar ? 'background:var(--cal-selected);color:var(--cal-selected-ink)' : glass ? 'background:var(--accent-soft);color:var(--accent)' : 'background:var(--action-fill);color:var(--action-ink)';el.append(probe);
           const expected=getComputedStyle(probe),actual=getComputedStyle(el);
           const result={background:actual.backgroundColor,color:actual.color,fill:expected.backgroundColor,ink:expected.color};
           probe.remove();return result;
@@ -74,7 +76,7 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
       for(const skin of ['classic','liquid']) for(const mode of ['light','dark']) {
         await settings();
         await page.locator(`input[name=skin][value=${skin}]`).check();
-        await page.locator('#appearanceMode').selectOption(mode);
+        await page.locator(`[name="appearance-theme"][value="${mode}"]`).check();
         await page.locator('#appearanceModal .primary-button').click();
         assert.equal(await page.evaluate(() => document.documentElement.dataset.skin),skin);
         await page.reload();
@@ -104,7 +106,12 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
           await cell.hover();
           await page.waitForTimeout(150);
           assert.equal(await cell.evaluate(el=>getComputedStyle(el).borderRadius),radius);
-          assert.equal(await cell.locator('.liquid-lens').count(),skin==='liquid'?1:0);
+          assert.equal(await cell.locator('.liquid-lens').count(),0,'Calendar must not mount a legacy lens per track');
+          const rect=await cell.boundingBox();
+          await cell.dispatchEvent('pointerdown',{pointerId:71,pointerType:'mouse',clientX:rect.x+8,clientY:rect.y+8,isPrimary:true});
+          await page.waitForTimeout(150);
+          assert.equal(await page.locator('.touch-material-layer canvas').count(),1,'Calendar shares one optical renderer');
+          await cell.dispatchEvent('pointercancel',{pointerId:71});
         }
         await page.locator('.landscape-schedule-menu summary').click();
         await page.locator('[data-landscape-schedule-action=course]').click();
@@ -186,7 +193,7 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
     await fallback.addInitScript(() => {
       localStorage.setItem('fangcun-skin','liquid');
       const original=HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext=function(type,...args) { return type==='webgl2' ? null : original.call(this,type,...args); };
+      HTMLCanvasElement.prototype.getContext=function(type,...args) { return ['webgl','webgl2','experimental-webgl'].includes(type) ? null : original.call(this,type,...args); };
     });
     const page=await fallback.newPage();
     const errors=[];page.on('pageerror',e=>errors.push(e.message));

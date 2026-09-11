@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$')]
-    [string]$Version = "2.7.0"
+    [string]$Version = "2.7.0-calendar3"
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,12 +11,12 @@ $stageRoot = Join-Path ([System.IO.Path]::GetTempPath()) "fangcun-release-$Versi
 $archive = Join-Path $releaseRoot "fangcun-release-$Version.tar.gz"
 
 $rootFiles = @(
-    ".env.example", "README.md", "package.json", "index.html", "privacy.html", "styles.css", "v22-layout.css",
+    ".env.example", "APPEARANCE.md", "README.md", "package.json", "index.html", "privacy.html", "styles.css", "v22-layout.css",
     "smart-parser.js", "docx-schedule-parser.js", "app.js", "manifest.webmanifest", "icon.svg",
-    "appearance.css", "liquid.css", "liquid-select.js", "appearance.js", "appearance-browser-smoke.js", "liquid-renderer.js", "three.module.min.js", "three.core.min.js", "THREE-LICENSE.txt",
+    "appearance.css", "xuan.css", "xuan-fibers.svg", "xuan-fibers-mobile.png", "xuan-sans.woff2", "xuan-serif.woff2", "FONT-LICENSE.txt", "material-light.js", "touch-material.js", "mobile-ui.css", "mobile-material.css", "mobile-calendar.css", "calendar-surface.css", "appearance-controls.js", "liquid.css", "liquid-select.js", "appearance.js", "appearance-browser-smoke.js", "xuan-browser-smoke.js", "liquid-material-smoke.js", "liquid-select-smoke.js", "liquid-renderer.js", "three.module.min.js", "three.core.min.js", "THREE-LICENSE.txt",
     "service-worker.js", "server.js", "outlook-sync.js", "google-sync.js", "reset-password.js", "smart-parser-smoke.js",
     "docx-schedule-smoke.js", "outlook-sync-smoke.js", "google-sync-smoke.js", "smoke-test.js", "runtime-smoke.js",
-    "mobile-smoke.js", "mobile-interaction-smoke.js", "v22-smoke.js", "android-smoke.js", "release-smoke.js", "password-reset-smoke.js", "server-smoke.js"
+    "mobile-smoke.js", "mobile-interaction-smoke.js", "mobile-calendar-smoke.js", "mobile-material-smoke.js", "mobile-ui-smoke.js", "touch-material-smoke.js", "touch-lifecycle-smoke.js", "gpu-renderer-smoke.js", "runtime-performance-smoke.js", "calendar-engine-smoke.js", "calendar-visual-smoke.js", "calendar-profile.js", "v22-smoke.js", "android-smoke.js", "release-smoke.js", "password-reset-smoke.js", "server-smoke.js"
 )
 
 function Assert-StageChild([string]$Target) {
@@ -38,7 +38,7 @@ try {
     # Whitelist approach: deploy tar only ships operational docs. Internal docs
     # (NEW-CHAT-PROMPT, PROJECT-HANDOFF-*, internal audits, delivery reports) never ship.
     New-Item -ItemType Directory -Path (Join-Path $stageRoot "docs") | Out-Null
-    foreach ($docName in @("calendar-sync-guide.md", "deployment-guide.md", "release-2.7.0.md")) {
+    foreach ($docName in @("calendar-sync-guide.md", "deployment-guide.md", "workbench-xuan.md", "xuan-material.md", "mobile-repair.md", "touch-material.md", "release-2.7.0.md")) {
         $src = Join-Path $projectRoot "docs\$docName"
         if (Test-Path -LiteralPath $src) {
             Copy-Item -LiteralPath $src -Destination (Join-Path $stageRoot "docs")
@@ -61,10 +61,19 @@ try {
         }
     }
 
+    # Never ship signing or machine-local configuration, even outside app/build.
+    Get-ChildItem -LiteralPath $stageRoot -File -Recurse | Where-Object {
+        $_.Name -in @("local.properties", "signing.properties") -or $_.Name -match '\.(jks|keystore|keystore\.id)$'
+    } | ForEach-Object {
+        Assert-StageChild $_.FullName
+        Remove-Item -LiteralPath $_.FullName -Force
+    }
+
     $originalWrapper = (Get-FileHash -LiteralPath (Join-Path $projectRoot "android\gradle\wrapper\gradle-wrapper.jar") -Algorithm SHA256).Hash
     $stagedWrapper = (Get-FileHash -LiteralPath (Join-Path $stageRoot "android\gradle\wrapper\gradle-wrapper.jar") -Algorithm SHA256).Hash
     if ($originalWrapper -ne $stagedWrapper) { throw "Gradle wrapper binary changed during staging." }
-    & tar -czf $archive -C $stageRoot .
+    # Use Windows-native bsdtar: MSYS tar on PATH misreads "C:\..." as a remote host.
+    & "$env:SystemRoot\System32\tar.exe" -czf $archive -C $stageRoot .
     if ($LASTEXITCODE -ne 0) { throw "Release archive creation failed." }
     Write-Host "Release archive: $archive"
     Get-FileHash -LiteralPath $archive -Algorithm SHA256 | Format-List

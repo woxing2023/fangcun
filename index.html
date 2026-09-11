@@ -8,12 +8,20 @@
     <title>方寸 · 今天先做什么</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="manifest.webmanifest?v=2.7.0" />
+    <link rel="stylesheet" href="calendar-surface.css?v=1" />
+    <link rel="stylesheet" href="mobile-ui.css?v=2" />
+    <link rel="stylesheet" href="mobile-material.css?v=2" />
+    <link rel="stylesheet" href="mobile-calendar.css?v=1" />
     <link rel="stylesheet" href="styles.css?v=2.7.0" />
     <link rel="stylesheet" href="v22-layout.css?v=2.7.0" />
-    <link rel="stylesheet" href="appearance.css?v=4" />
-    <link rel="stylesheet" href="liquid.css?v=4" />
-    <script src="appearance.js?v=4"></script>
-    <script src="liquid-select.js?v=4" defer></script>
+    <link rel="stylesheet" href="appearance.css?v=6" />
+    <link rel="stylesheet" href="xuan.css?v=3" />
+    <link rel="stylesheet" href="liquid.css?v=5" />
+    <script src="appearance.js?v=7"></script>
+    <script src="liquid-select.js?v=6" defer></script>
+    <script src="material-light.js?v=5" defer></script>
+    <script src="touch-material.js?v=2" defer></script>
+    <script src="appearance-controls.js?v=1" defer></script>
   </head>
   <body data-active-view="today">
     <svg class="icon-sprite" aria-hidden="true">
@@ -171,13 +179,15 @@
             <button class="icon-button" id="nextWeekBtn" aria-label="下一周"><svg class="ui-icon"><use href="#icon-chevron-right" /></svg></button>
             <button class="text-button current-week-button" id="currentWeekBtn">本周</button>
             <div class="view-switch"><button data-schedule-mode="year">年</button><button data-schedule-mode="month">月</button><button class="active" data-schedule-mode="week">周</button><button data-schedule-mode="day">日</button><button data-schedule-mode="timetable">课表</button></div>
-            <div class="calendar-zoom-tools" aria-label="日历缩放"><button type="button" id="calendarZoomOut" aria-label="缩小日历">−</button><button type="button" id="calendarZoomFit" title="适应屏幕宽度">适宽</button><button type="button" id="calendarZoomIn" aria-label="放大日历">＋</button></div>
+            <div class="calendar-zoom-tools" aria-label="日历缩放"><button type="button" id="calendarZoomOut" aria-label="缩小日历">−</button><button type="button" id="calendarZoomFit" title="显示完整一周与全部时段">全表</button><button type="button" id="calendarZoomIn" aria-label="放大日历">＋</button></div>
+            <button type="button" id="calendarListBtn" class="calendar-list-button" aria-pressed="false">清单</button>
             <div class="landscape-schedule-tools">
               <button class="icon-button" type="button" data-landscape-schedule-action="add" aria-label="新建日程"><svg class="ui-icon"><use href="#icon-plus" /></svg></button>
               <details class="landscape-schedule-menu"><summary aria-label="更多日历操作"><svg class="ui-icon"><use href="#icon-more" /></svg></summary><div><button type="button" data-landscape-schedule-action="course">添加课程</button><button type="button" data-landscape-schedule-action="import">数据与同步</button><button type="button" data-landscape-schedule-action="rules">校历与节假日</button><button type="button" data-landscape-schedule-action="settings">学期设置</button></div></details>
             </div>
           </div>
           <div class="week-deadlines" id="weekDeadlines"></div>
+          <div id="calendarFocus" class="calendar-focus hidden" aria-live="polite"></div>
           <div class="schedule-board-wrap">
             <div class="schedule-board" id="scheduleBoard"></div>
             <div class="week-calendar hidden" id="weekCalendar"></div>
@@ -482,10 +492,16 @@
       <form method="dialog">
         <div class="modal-header"><div><span class="eyebrow">外观设置</span><h2 id="appearanceTitle">选择你的方寸</h2></div><button class="close-button" aria-label="关闭外观设置">×</button></div>
         <fieldset class="skin-options"><legend>界面皮肤</legend>
-          <label class="skin-option"><input type="radio" name="skin" value="classic" /><span class="skin-preview preview-classic" aria-hidden="true"><i></i><i></i><i></i></span><strong>经典纸感</strong><small>熟悉的暖纸、墨色与绿色</small></label>
-          <label class="skin-option"><input type="radio" name="skin" value="liquid" /><span class="skin-preview preview-liquid" aria-hidden="true"><i></i><i></i><i></i></span><strong>流光玻璃</strong><small>冷银雾面、通透叠层与柔和水纹</small></label>
+          <label class="skin-option"><input type="radio" name="skin" value="classic" /><span class="skin-preview preview-classic" aria-hidden="true"><i></i><i></i><i></i></span><strong>宣纸</strong><small>温润纸感，清晰阅读</small></label>
+          <label class="skin-option"><input type="radio" name="skin" value="liquid" /><span class="skin-preview preview-liquid" aria-hidden="true"><i></i><i></i><i></i></span><strong>流光玻璃</strong><small>通透层次，冷调流光</small></label>
         </fieldset>
-        <label class="field"><span>显示模式</span><select id="appearanceMode"><option value="light">浅色</option><option value="dark">深色</option></select></label>
+        <fieldset class="appearance-modes"><legend>显示模式</legend>
+          <select id="appearanceMode" class="appearance-mode-source" data-inline-choice tabindex="-1" aria-hidden="true"><option value="light">浅色</option><option value="dark">深色</option></select>
+          <div class="appearance-mode-options">
+            <label class="appearance-mode-option"><span>浅色</span><input type="radio" name="appearance-theme" value="light" /></label>
+            <label class="appearance-mode-option"><span>深色</span><input type="radio" name="appearance-theme" value="dark" /></label>
+          </div>
+        </fieldset>
         <p class="field-hint" id="appearanceStatus" role="status">选择立即生效，仅保存在当前设备。</p>
         <div class="appearance-footer"><button class="primary-button">完成</button></div>
       </form>

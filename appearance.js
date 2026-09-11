@@ -2,6 +2,16 @@
 (() => {
   "use strict";
   const root = document.documentElement;
+  // Touch layouts use the shared GPU optical layer in touch-material.js.
+  // Desktop pointer optics retain their existing adapter.
+  const compact = matchMedia("(max-width: 900px), (pointer: coarse), (hover: none)");
+  const nativeAndroid = () => typeof window.FangcunNative?.syncReminders === "function"
+    || /Android/i.test(navigator.userAgent || "");
+  const updatePerformance = () => {
+    const profile = compact.matches || nativeAndroid() ? "touch" : "dynamic";
+    if (root.dataset.materialPerformance !== profile) root.dataset.materialPerformance = profile;
+  };
+  updatePerformance();
   const read = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch { return fallback; } };
   root.dataset.skin = read("fangcun-skin", "classic") === "liquid" ? "liquid" : "classic";
   root.dataset.mode = read("fangcun-theme", "light") === "dark" ? "dark" : "light";
@@ -12,6 +22,9 @@
     const status = document.getElementById("appearanceStatus");
     const mode = document.getElementById("appearanceMode");
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+    const forced = matchMedia("(forced-colors: active)");
+    const effectsEnabled = () => root.dataset.materialPerformance === "dynamic"
+      && !reduced.matches && !forced.matches && !document.hidden;
     let active = null;
     let frame = 0;
     let latest = null;
@@ -25,15 +38,16 @@
         if (typeof factory !== 'function') throw new TypeError('Renderer factory must be a function');
         clear(); renderer?.dispose(); renderer=null; rendererLoading=null; rendererFactory=factory; rendererFailed=false;
       },
-      get skin() { return root.dataset.skin; }
+      get skin() { return root.dataset.skin; },
+      get effectsEnabled() { return effectsEnabled(); }
     });
     async function ensureRenderer(state) {
-      if (rendererFailed || reduced.matches) return;
+      if (rendererFailed || !effectsEnabled()) return;
       try {
         if (!renderer) {
           rendererLoading ||= rendererFactory ? Promise.resolve(rendererFactory) : import('./liquid-renderer.js').then(module => module.createRenderer);
           const factory = await rendererLoading;
-          if (active !== state || reduced.matches || root.dataset.skin !== 'liquid') return;
+          if (active !== state || !effectsEnabled() || root.dataset.skin !== 'liquid') return;
           renderer ||= factory();
         }
         if (active === state) renderer.mount(state.lens, state.rect);
@@ -58,7 +72,8 @@
     });
     // Observe the existing theme shortcut so it and the settings always agree.
     new MutationObserver(() => {
-      root.dataset.mode = document.body.classList.contains("dark") ? "dark" : "light";
+      const nextMode = document.body.classList.contains("dark") ? "dark" : "light";
+      if (root.dataset.mode !== nextMode) root.dataset.mode = nextMode;
       mode.value = root.dataset.mode;
       document.querySelector('meta[name="theme-color"]').content = root.dataset.mode === "dark" ? (root.dataset.skin === "liquid" ? "#202934" : "#1f211f") : root.dataset.skin === "liquid" ? "#e8edf2" : "#f4f2ed";
     }).observe(document.body, { attributes:true, attributeFilter:["class"] });
@@ -78,8 +93,8 @@
       active = null;
     }
     function surface(target) {
-      if (root.dataset.skin !== "liquid" || reduced.matches || document.hidden) return null;
-      if (!(target instanceof Element)) return null;
+      if (root.dataset.skin !== "liquid" || !effectsEnabled()) return null;
+      if (!(target instanceof Element) || target.closest("#scheduleView")) return null;
       const control = target.closest('[data-material="glass"], button, input, textarea, select, summary, a[href], [contenteditable="true"], [role="button"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], [role="option"], [role="combobox"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], .skin-option, .switch-label, .import-choice label, .import-label');
       if (!control || control.disabled || control.matches('[aria-disabled="true"],.liquid-select-native,.sidebar-backdrop') || control.closest('[inert], [data-material="none"], [data-material="paper"], .task-card, .list-row, .today-class, .today-timeline-row, .today-ddl-row, .day-course-card, .day-task-card, .agenda-course, .overview-course, .course-block, .calendar-week-event, .calendar-entry, .month-day, [data-calendar-date]')) return null;
       if (active?.target === control) return active;
@@ -117,7 +132,7 @@
       animation.onfinish = () => { node.remove(); state.animations.delete(animation); };
     }
     document.addEventListener("pointermove", event => {
-      if (event.pointerType === "touch") return;
+      if (event.pointerType === "touch" || !effectsEnabled()) return;
       latest = event;
       if (frame) return;
       frame = requestAnimationFrame(() => {
@@ -147,7 +162,10 @@
     });
     document.addEventListener("scroll", clear, { capture:true, passive:true });
     document.addEventListener("visibilitychange", releaseRenderer);
-    window.addEventListener("resize", clear);
+    function refreshPerformance() { updatePerformance(); releaseRenderer(); }
+    window.addEventListener("resize", refreshPerformance);
+    compact.addEventListener("change", refreshPerformance);
+    forced.addEventListener("change", releaseRenderer);
     reduced.addEventListener("change", releaseRenderer);
     window.addEventListener("pagehide", releaseRenderer);
     sync();

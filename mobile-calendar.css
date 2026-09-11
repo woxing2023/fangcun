@@ -1,0 +1,118 @@
+/* Calendar geometry is independent of material. Full-table mode uses the actual
+   canvas height; reading and list modes keep reachable, full course details. */
+.calendar-list-button { flex:0 0 auto; min-height:36px; padding:5px 12px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--card); font-size:12px; cursor:pointer; }
+body #scheduleView .calendar-week-grid { grid-template-rows:34px minmax(28px,auto) repeat(var(--calendar-row-count,32),var(--calendar-step,23px)); }
+body #scheduleView .calendar-week-grid.no-all-day { grid-template-rows:34px 0 repeat(var(--calendar-row-count,32),var(--calendar-step,23px)); }
+body #scheduleView .schedule-board { grid-template-rows:34px; }
+body #scheduleView .calendar-week-head { white-space:nowrap; flex-wrap:nowrap; }
+body #scheduleView .calendar-week-head strong { white-space:nowrap; }
+body #scheduleView .schedule-board-wrap[data-calendar-layout="overview"] { overflow:hidden; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-week-grid {
+  width:100%; min-width:0; height:var(--calendar-fit-height,100%);
+  grid-template-columns:40px repeat(7,minmax(0,1fr));
+  grid-template-rows:34px var(--calendar-fit-all-day,0px) repeat(var(--calendar-row-count,32),minmax(0,var(--calendar-fit-step,16px)));
+}
+body #scheduleView [data-calendar-layout="overview"] .schedule-board {
+  width:100%; min-width:0; height:var(--calendar-fit-height,100%);
+  grid-template-columns:40px repeat(var(--day-count),minmax(0,1fr));
+  grid-template-rows:34px; grid-auto-rows:minmax(0,var(--calendar-fit-step,32px));
+}
+body #scheduleView [data-calendar-layout="overview"] :is(.calendar-week-head,.schedule-day-head) { min-width:0; overflow:hidden; gap:1px; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-week-head { flex-direction:column; line-height:1.1; }
+body #scheduleView [data-calendar-layout="overview"] .schedule-day-head { gap:1px; }
+body #scheduleView [data-calendar-layout="overview"] :is(.calendar-week-event,.course-block) { min-width:0; min-height:0; margin:1px; padding:3px; border-radius:5px; overflow:hidden; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-all-day { display:flex; flex-direction:column; min-height:0; padding:1px; overflow:hidden; gap:1px; }
+body #scheduleView [data-calendar-layout="overview"] .no-all-day .calendar-all-day { display:none; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-all-day-item { flex:1; min-height:0; padding:1px; overflow:hidden; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-all-day > span { flex:0 0 11px; font-size:9px; line-height:11px; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-hour { min-height:0; display:flex; align-items:flex-start; justify-content:center; padding-top:2px; overflow:hidden; }
+body #scheduleView [data-calendar-layout="overview"] .schedule-time { min-height:0; overflow:hidden; }
+body #scheduleView [data-calendar-layout="overview"] .schedule-time strong { margin:0; }
+body #scheduleView [data-calendar-layout="overview"] .schedule-time span { line-height:1.2; }
+body #scheduleView .schedule-time time { display:block; }
+body #scheduleView [data-calendar-layout="overview"] .course-block { display:flex; flex-direction:column; align-items:stretch; gap:2px; }
+body #scheduleView [data-calendar-layout="overview"] :is(.course-block,.calendar-week-event) strong { margin:0; max-width:100%; min-height:0; white-space:normal; overflow-wrap:anywhere; text-overflow:clip; overflow:hidden; flex-shrink:1; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-week-event time { white-space:nowrap; }
+body #scheduleView [data-calendar-layout="overview"] .calendar-week-event span { flex-shrink:0; white-space:nowrap; text-overflow:ellipsis; }
+body #scheduleView [data-calendar-layout="detail"] .calendar-week-event strong { white-space:normal; overflow-wrap:anywhere; text-overflow:clip; }
+body #scheduleView [data-calendar-layout="detail"] .course-block { min-width:0; min-height:0; }
+body #scheduleView [data-calendar-layout="list"] { overflow:auto; }
+body #scheduleView .agenda-list { padding:12px; min-width:0; }
+.calendar-list-intro { margin:0 0 14px; color:var(--muted); font-size:12px; }
+.calendar-list-day { margin:0 0 18px; min-width:0; }
+.calendar-list-day h3 { display:flex; align-items:baseline; gap:8px; margin:0 0 7px; font-size:14px; }
+.calendar-list-day h3 span { color:var(--muted); font-size:11px; font-weight:400; }
+.calendar-list-item { display:grid; grid-template-columns:48px minmax(0,1fr) 14px; gap:9px; align-items:start; width:100%; min-width:0; min-height:58px; margin:0 0 6px; padding:10px; border:1px solid var(--line); border-radius:10px; text-align:left; color:var(--ink); background:var(--card); cursor:pointer; }
+.calendar-list-item time { white-space:nowrap; font-size:12px; line-height:1.5; }
+.calendar-list-item time small { display:block; color:var(--muted); font-size:11px; }
+.calendar-list-item > div { min-width:0; }
+.calendar-list-item strong { display:block; white-space:normal; overflow-wrap:anywhere; font-size:14px; line-height:1.5; }
+.calendar-list-item div > span { display:block; margin-top:3px; color:var(--muted); white-space:normal; overflow-wrap:anywhere; font-size:12px; line-height:1.4; }
+.calendar-list-arrow { align-self:center; color:var(--muted); font-size:21px; }
+.calendar-list-empty { margin:0; padding:8px 0; color:var(--muted); font-size:12px; }
+
+/* Earlier material layers have important font resets. This narrow layer keeps
+   the grid type sizes explicit without painting a second material system. */
+@layer mobile-calendar {
+  html body #scheduleView :is(.schedule-board,.schedule-board button,.agenda-list,.semester-overview,.day-schedule) {
+    font-family:"Fangcun UI","PingFang SC","Microsoft YaHei",sans-serif !important;
+  }
+  html body #scheduleView .calendar-list-item strong { font-weight:550 !important; }
+  html body #scheduleView .calendar-list-button { font-size:12px !important; }
+  html body #scheduleView [data-calendar-layout="overview"] :is(.calendar-week-head,.schedule-day-head) strong { font-size:10px !important; font-weight:550 !important; }
+  html body #scheduleView [data-calendar-layout="overview"] :is(.calendar-week-head,.schedule-day-head) span { font-size:9px !important; }
+  html body #scheduleView [data-calendar-layout="overview"] :is(.calendar-hour,.calendar-week-corner,.schedule-corner,.schedule-time) { font-size:9px !important; }
+  html body #scheduleView [data-calendar-layout="overview"] .schedule-time strong { font-size:10px !important; }
+  html body #scheduleView [data-calendar-layout="overview"] :is(.course-block,.calendar-week-event) strong { font-size:10px !important; line-height:1.25 !important; font-weight:550 !important; }
+  html body #scheduleView [data-calendar-layout="overview"] :is(.course-block,.calendar-week-event) :is(time,span),
+  html body #scheduleView [data-calendar-layout="overview"] .calendar-all-day-item { font-size:9px !important; line-height:1.2 !important; }
+  html body #scheduleView [data-calendar-density="dense"][data-calendar-layout="overview"] .calendar-hour { padding-top:0; font-size:8px !important; line-height:1 !important; }
+  html body #scheduleView [data-calendar-density="dense"][data-calendar-layout="overview"] .calendar-week-event { padding:1px 3px !important; gap:0 !important; }
+  html body #scheduleView [data-calendar-density="dense"][data-calendar-layout="overview"] .calendar-week-event :is(time,span) { display:none !important; }
+  html body #scheduleView [data-calendar-density="dense"][data-calendar-layout="overview"] .schedule-time strong,
+  html body #scheduleView [data-calendar-density="dense"][data-calendar-layout="overview"] .schedule-time time + time { display:none !important; }
+  html body #scheduleView .calendar-list-item { font-size:14px !important; }
+}
+
+@media (max-width:720px) and (orientation:portrait) {
+  body[data-active-view="schedule"] #scheduleView .week-toolbar { display:flex; flex-wrap:wrap; gap:4px; padding:calc(4px + var(--safe-top)) 0 6px; }
+  body[data-active-view="schedule"] #scheduleView .week-toolbar > :is(.mobile-menu,.icon-button) { flex:0 0 36px; width:36px; min-width:36px; height:36px; min-height:36px; }
+  body[data-active-view="schedule"] #scheduleView .week-title { flex:1 1 calc(100% - 128px); max-width:none; min-height:36px; padding:6px 9px; }
+  body[data-active-view="schedule"] #scheduleView .week-title strong { font-size:12px; }
+  body[data-active-view="schedule"] #scheduleView .current-week-button { display:none; }
+  body[data-active-view="schedule"] #scheduleView .view-switch { order:1; flex:0 0 100%; width:100%; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); margin:0; border-radius:11px; }
+  body[data-active-view="schedule"] #scheduleView .view-switch button { min-height:36px; min-width:0; padding:3px 7px; font-size:12px; }
+  body[data-active-view="schedule"] #scheduleView .calendar-zoom-tools { order:2; flex:0 1 auto; border-radius:10px; }
+  body[data-active-view="schedule"] #scheduleView .calendar-zoom-tools button { min-height:34px; min-width:34px; padding:3px 8px; font-size:12px; }
+  body[data-active-view="schedule"] #calendarZoomFit { min-width:52px; }
+  body[data-active-view="schedule"] #scheduleView .calendar-list-button { order:2; min-height:34px; min-width:52px; padding:4px 10px; }
+  body[data-active-view="schedule"] #scheduleView .landscape-schedule-tools { order:2; margin-left:auto; gap:4px; }
+  body[data-active-view="schedule"] #scheduleView .landscape-schedule-tools > .icon-button,
+  body[data-active-view="schedule"] #scheduleView .landscape-schedule-menu summary { width:34px; height:34px; min-width:34px; min-height:34px; }
+}
+@media (orientation:landscape) and (pointer:coarse) {
+  body[data-active-view="schedule"] #scheduleView .week-toolbar { flex-wrap:nowrap; gap:4px; padding-bottom:4px; }
+  body[data-active-view="schedule"] #scheduleView .week-toolbar > :is(.mobile-menu,.icon-button),
+  body[data-active-view="schedule"] #scheduleView .landscape-schedule-tools > .icon-button,
+  body[data-active-view="schedule"] #scheduleView .landscape-schedule-menu summary { width:32px; min-width:32px; height:32px; min-height:32px; flex:0 0 32px; }
+  body[data-active-view="schedule"] #scheduleView .week-title { flex:1 1 auto; max-width:210px; padding:5px 7px; }
+  body[data-active-view="schedule"] #scheduleView .week-title strong { font-size:11px; }
+  body[data-active-view="schedule"] #scheduleView .current-week-button { display:none; }
+  body[data-active-view="schedule"] #scheduleView .view-switch { margin-left:auto; }
+  body[data-active-view="schedule"] #scheduleView .view-switch button { min-width:28px; min-height:32px; padding:3px 7px; font-size:11px; }
+  body[data-active-view="schedule"] #scheduleView .calendar-zoom-tools button { min-width:27px; min-height:32px; padding:3px 6px; font-size:11px; }
+  body[data-active-view="schedule"] #scheduleView .calendar-list-button { min-height:32px; padding:3px 8px; font-size:11px; }
+  body[data-active-view="schedule"] #scheduleView .landscape-schedule-tools { gap:4px; }
+}
+@media (max-width:740px) and (orientation:landscape) and (pointer:coarse) {
+  body[data-active-view="schedule"] #scheduleView .week-toolbar { flex-wrap:wrap; }
+  body[data-active-view="schedule"] #scheduleView .week-title { flex:1 1 calc(100% - 194px); max-width:none; }
+  body[data-active-view="schedule"] #scheduleView .view-switch { order:1; flex:1; margin-left:0; }
+  body[data-active-view="schedule"] #scheduleView .view-switch button { flex:1; }
+  body[data-active-view="schedule"] #scheduleView .calendar-zoom-tools,
+  body[data-active-view="schedule"] #scheduleView .calendar-list-button { order:1; }
+}
+@media (min-width:960px) {
+  body #scheduleView .agenda-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 18px; }
+  body #scheduleView .calendar-list-intro { grid-column:1 / -1; }
+}

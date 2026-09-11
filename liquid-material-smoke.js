@@ -13,30 +13,45 @@ async function audit(page, label, root = 'body') {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
     const ctx = canvas.getContext('2d');
     const rgba = color => { ctx.clearRect(0,0,1,1); ctx.fillStyle = color; ctx.fillRect(0,0,1,1); return [...ctx.getImageData(0,0,1,1).data]; };
+    const mobile = document.documentElement.dataset.materialPerformance === 'touch';
     const issues = []; let count = 0;
     for (const el of scope.querySelectorAll(selector)) {
       if (!el.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}) || !el.getBoundingClientRect().height) continue;
       count++;
       const s = getComputedStyle(el), name = el.id || `${el.tagName}.${String(el.className).replace(/\s+/g,'.')}`;
       const bg = rgba(s.backgroundColor);
-      if(bg[3] === 255) issues.push(`${name}: opaque background ${s.backgroundColor}`);
+      const calendar = Boolean(el.closest('#scheduleView')) || (document.body.dataset.activeView==='schedule' && el.matches('.sidebar .nav-item.active'));
+      // Calendar uses a shared optical plane with semantic course and selected colors.
+      if(calendar) {
+        if(s.backdropFilter!=='none' || s.filter!=='none') issues.push(`${name}: per-control calendar filtering`);
+        if(el.matches('[data-calendar-track]') && s.boxShadow!=='none') issues.push(`${name}: empty-track shadow`);
+        if(bg[3]===255 && rgba(s.color).slice(0,3).every((v,i)=>Math.abs(v-bg[i])<20)) issues.push(`${name}: calendar foreground merges with background`);
+      }
+      if(!mobile && !calendar && bg[3] === 255) issues.push(`${name}: opaque background ${s.backgroundColor}`);
       const max = Math.max(...bg.slice(0,3)), min = Math.min(...bg.slice(0,3));
-      if(bg[3]>32 && bg[1]>bg[0]*1.12 && bg[1]>bg[2]*1.12 && max-min>65) issues.push(`${name}: saturated green ${s.backgroundColor}`);
+      if(!mobile && !calendar && bg[3]>32 && bg[1]>bg[0]*1.12 && bg[1]>bg[2]*1.12 && max-min>65) issues.push(`${name}: saturated green ${s.backgroundColor}`);
       for(const side of ['Top','Right','Bottom','Left']) {
         const border=rgba(s[`border${side}Color`]);
-        if(parseFloat(s[`border${side}Width`])>0 && s[`border${side}Style`]!=='none' && border[3]>96) issues.push(`${name}: high-contrast ${side} border ${s[`border${side}Color`]}`);
+        if(!mobile && !calendar && parseFloat(s[`border${side}Width`])>0 && s[`border${side}Style`]!=='none' && border[3]>96) issues.push(`${name}: high-contrast ${side} border ${s[`border${side}Color`]}`);
       }
       if(el.type==='file') {
         const fileStyle=getComputedStyle(el,'::file-selector-button');
-        if(rgba(fileStyle.backgroundColor)[3]===255) issues.push(`${name}: opaque file selector button`);
-        if(parseFloat(fileStyle.borderTopWidth)>0 && rgba(fileStyle.borderTopColor)[3]>96) issues.push(`${name}: high-contrast file selector border`);
+        if(!mobile && !calendar && rgba(fileStyle.backgroundColor)[3]===255) issues.push(`${name}: opaque file selector button`);
+        if(!mobile && !calendar && parseFloat(fileStyle.borderTopWidth)>0 && rgba(fileStyle.borderTopColor)[3]>96) issues.push(`${name}: high-contrast file selector border`);
+      }
+      // Touch uses shared backdrop panels plus static glass bevels on records.
+      // Dense hit cells must stay flat; pointer optics use one isolated canvas.
+      if(mobile) {
+        if(s.backdropFilter !== 'none' || s.filter !== 'none') issues.push(`${name}: mobile filtering`);
+        if(el.matches('.calendar-time-cell,.schedule-cell') && s.boxShadow !== 'none') issues.push(`${name}: dense mobile shadow`);
+        if(bg[3]===255 && rgba(s.color).slice(0,3).every((v,i)=>Math.abs(v-bg[i])<20)) issues.push(`${name}: foreground merges with background`);
       }
       if(['INPUT','TEXTAREA','SELECT'].includes(el.tagName) && !['date','time','color','range'].includes(el.type) && s.appearance !== 'none') issues.push(`${name}: native appearance ${s.appearance}`);
     }
     const opaque = [...scope.querySelectorAll('*')].filter(el=>el.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}) && el.getBoundingClientRect().height && rgba(getComputedStyle(el).backgroundColor)[3]===255).map(el=>`${el.id || el.tagName+'.'+String(el.className).replace(/\s+/g,'.')} (parent ${el.parentElement?.id || el.parentElement?.className}): ${getComputedStyle(el).backgroundColor}`);
     return {count,issues,opaque};
   }, controls);
-  if(result.opaque.length) console.log(`${label} opaque background diagnostics: ${result.opaque.join('; ')}`);
+  if(result.opaque.length && !label.startsWith('390/')) console.log(`${label} opaque background diagnostics: ${result.opaque.join('; ')}`);
   assert.ok(result.count > 0, `${label}: no controls sampled`);
   assert.deepEqual(result.issues, [], `${label}\n${result.issues.join('\n')}`);
   console.log(`${label}: ${result.count} visible controls`);
@@ -50,7 +65,7 @@ async function audit(page, label, root = 'body') {
   const server = http.createServer((req,res) => {
     const file = path.resolve(__dirname, '.' + new URL(req.url,'http://localhost').pathname.replace(/\/$/,'/index.html'));
     if(!file.startsWith(__dirname+path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return res.writeHead(404).end();
-    res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html'); fs.createReadStream(file).pipe(res);
+    res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.woff2')?'font/woff2':'text/html'); fs.createReadStream(file).pipe(res);
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   let browser;
@@ -76,6 +91,7 @@ async function audit(page, label, root = 'body') {
       // Real seeded task/project/course content, rendered by the production application.
       for(const [view,selector] of [['matrix','[data-task-id]'],['projects','[data-project-id]'],['schedule','[data-course-id]']]) {
         await page.evaluate(view=>document.querySelector(`.main-nav [data-view="${view}"]`).click(),view);
+        if(view==='schedule') await page.locator('[data-schedule-mode=timetable]').click();
         assert.ok(await page.locator(selector).count()>0,`${label}: missing dynamic ${selector}`);
       }
       for(const [trigger,id] of [['openCreateBtn',width<500?'mobileCreateModal':'taskModal'],['addProjectBtn','projectModal'],['semesterSettingsBtn','semesterModal'],['calendarRulesBtn','calendarRulesModal'],['reminderSettingsBtn','remindersModal'],['cloudBtn','cloudModal'],['appearanceSettingsBtn','appearanceModal']]) {
@@ -114,6 +130,7 @@ async function audit(page, label, root = 'body') {
       });
       await audit(page,`${label}/future-controls`,'#materialFixture');
       const button=page.locator('#materialFixture button').first();
+      await page.keyboard.press('Tab'); // Exercise keyboard focus, after earlier pointer clicks.
       await button.focus();
       const focus=await button.evaluate(el=>{const s=getComputedStyle(el);return {outline:s.outlineStyle,width:parseFloat(s.outlineWidth),shadow:s.boxShadow};});
       assert.ok((focus.outline!=='none' && focus.width>0)||focus.shadow!=='none','Keyboard focus must be visible');

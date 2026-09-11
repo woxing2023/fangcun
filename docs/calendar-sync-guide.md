@@ -21,20 +21,15 @@
 
 小米系统日历由 APK 合并：开启同步、打开或返回 App、以及方寸内修改后触发。当前不是每秒实时协同编辑；正常传播时间是服务器通道 0–5 分钟，再加一次 APK 打开/返回。
 
-## 2. 阿里云 Workbench 升级 v2.7.0
+## 2. 本次发布与 Workbench 升级
 
-在 Windows 电脑把 `release/fangcun-release-2.7.0.tar.gz` 上传到 Workbench 的 `/home/admin/`。在 Workbench 终端逐条执行：
+本次服务器包为 `fangcun-release-2.7.0-calendar3.tar.gz`，构建为 `20260911-calendar-v3`。本地只负责检查、打包和交付；Hermes 负责上传 GitHub Release，并在 Workbench 下载、校验和升级。
 
-```bash
-mkdir -p /home/admin/fangcun-2.7.0
-tar -xzf /home/admin/fangcun-release-2.7.0.tar.gz -C /home/admin/fangcun-2.7.0
-cd /home/admin/fangcun-2.7.0
-sudo bash deploy/backup.sh
-sudo bash deploy/install.sh
-sudo bash deploy/verify.sh
-```
+暂存目录使用随机临时目录或当前账户的 `$HOME`，不写死登录账户路径。完整 tag、校验文件、升级与回滚命令见 [Workbench 交接说明](workbench-xuan.md)。
 
-服务仍只监听 `127.0.0.1:18443`。Cloudflare Tunnel 继续指向 `http://127.0.0.1:18443`，不要在阿里云安全组公开 18443。
+服务仍只监听 `127.0.0.1:18443`，沿用现有 Cloudflare Tunnel。不修改 nginx、hysteria2、Tunnel 配置或公网端口。
+
+下文的 `https://calendar.example.invalid` 是文档占位地址。实际回调地址由部署负责人在现有授权环境中填写，不能直接使用占位值。
 
 ## 3. 配置 Outlook / Microsoft 365
 
@@ -45,7 +40,7 @@ sudo bash deploy/verify.sh
 3. 添加 **Web** 重定向 URI：
 
 ```text
-https://fangcun.example.org/api/integrations/outlook/callback
+https://calendar.example.invalid/api/integrations/outlook/callback
 ```
 
 4. 添加 Microsoft Graph 委托权限：`User.Read`、`Calendars.ReadWrite`。
@@ -65,7 +60,7 @@ sudoedit /etc/fangcun.env
 MICROSOFT_CLIENT_ID=应用程序客户端ID
 MICROSOFT_CLIENT_SECRET=客户端密码的值
 MICROSOFT_TENANT=common
-MICROSOFT_REDIRECT_URI=https://fangcun.example.org/api/integrations/outlook/callback
+MICROSOFT_REDIRECT_URI=https://calendar.example.invalid/api/integrations/outlook/callback
 ```
 
 ## 4. 配置 Google 日历
@@ -79,7 +74,7 @@ MICROSOFT_REDIRECT_URI=https://fangcun.example.org/api/integrations/outlook/call
 5. 添加已获授权的重定向 URI，必须逐字一致：
 
 ```text
-https://fangcun.example.org/api/integrations/google/callback
+https://calendar.example.invalid/api/integrations/google/callback
 ```
 
 6. 保存客户端 ID 和客户端密钥。不要把密钥放进网页、APK、聊天记录或代码仓库。
@@ -99,7 +94,7 @@ sudoedit /etc/fangcun.env
 ```dotenv
 GOOGLE_CLIENT_ID=Google网页客户端ID
 GOOGLE_CLIENT_SECRET=Google网页客户端密钥
-GOOGLE_REDIRECT_URI=https://fangcun.example.org/api/integrations/google/callback
+GOOGLE_REDIRECT_URI=https://calendar.example.invalid/api/integrations/google/callback
 ```
 
 Outlook 和 Google 令牌共同使用以下服务端加密密钥。`deploy/install.sh` 在缺少时会自动生成；已有值绝不能更换，否则保存的令牌将无法解密：
@@ -215,7 +210,7 @@ Google Cloud 中的 Web 重定向 URI 与 `GOOGLE_REDIRECT_URI` 必须完全相�
 ```text
 明天下午3点到5点参加物理小组讨论，重要不紧急，提前30分钟提醒，地点B12-201
 9月18日晚上8点交化学实验报告，重要紧急，提前1天提醒，关联化学原理I
-每周二、周五第1-2节大学物理A（上），1-17周，湖畔校区B12-201，提前15分钟提醒
+每周二、周五第1-2节大学物理A（上），1-17周，示例校区B12-201，提前15分钟提醒
 ```
 
 确认智能预览后一次写入。方寸云端保存后，Outlook、Google 和小米通道会按上述流程继续传播。

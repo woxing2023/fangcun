@@ -1,5 +1,5 @@
 const APP_VERSION = "2.7.0";
-const APP_BUILD = "20260908-calendar-controls";
+const APP_BUILD = "20260911-calendar-v3-fix";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";
@@ -1046,19 +1046,19 @@ function calendarRuleForDate(date) {
   return data.calendarRules.find((rule) => rule.date === key) || null;
 }
 
-function courseOccurrence(course, date) {
-  const dateKey = localISO(date);
+function courseOccurrence(course, date, context = null) {
+  const dateKey = context?.key || localISO(date);
   const movedHere = data.courseExceptions.find((item) => item.courseId === course.id && item.type === "reschedule" && item.targetDate === dateKey);
   if (movedHere) {
     const originalWeek = currentSemesterWeek(dateFromISO(movedHere.date));
     return course.weeks.includes(originalWeek) ? { ...course, day: date.getDay() || 7, startSection: movedHere.startSection, endSection: movedHere.endSection, occurrenceChanged: true } : null;
   }
-  const week = currentSemesterWeek(date);
-  const calendarRule = calendarRuleForDate(date);
+  const week = context?.week ?? currentSemesterWeek(date);
+  const calendarRule = context ? context.rule : calendarRuleForDate(date);
   if (calendarRule?.type === "holiday") return null;
   const weekday = calendarRule?.type === "teaching" ? Number(calendarRule.useDay) : (date.getDay() || 7);
   if (!course.weeks.includes(week)) return null;
-  const exception = exceptionForWeek(course, week);
+  const exception = data.courseExceptions.length ? exceptionForWeek(course, week) : null;
   if (exception?.type === "cancel") return null;
   if (exception?.type === "reschedule") return (exception.targetDate ? exception.targetDate === dateKey : exception.day === weekday) ? { ...course, day: exception.day, startSection: exception.startSection, endSection: exception.endSection, occurrenceChanged: true } : null;
   return course.day === weekday ? course : null;
@@ -1371,11 +1371,15 @@ function renderDaySchedule(start, dayCount) {
   }).join("")}</div><div class="day-heading"><div><h3>${formatDate(displayedDay)} · ${weekdays[selected.getDay()]}</h3><p>${rule ? escapeHTML(rule.name) : "按时间顺序查看今天的课程与截止事项"}</p></div><span>${courses.length} 门课 · ${tasks.length} 个事项</span></div><div class="day-timeline">${courses.map((course) => `<article class="day-course-card" data-course-id="${course.id}" style="--course-color:${course.color}"><time>${escapeHTML(courseTimeText(course))}</time><i></i><div><strong>${escapeHTML(course.name)}</strong><span>${escapeHTML([course.teacher, coursePlace(course)].filter(Boolean).join(" · ") || "暂无地点信息")}</span></div><em>${pendingCourseTasks(course.id).length} 个待办</em></article>`).join("")}${tasks.map((task) => `<article class="day-task-card" data-task-id="${task.id}"><time>${escapeHTML(task.startTime || task.dueTime || "DDL")}</time><i></i><div><strong>${escapeHTML(task.title)}</strong><span>${task.courseId ? escapeHTML(courseById(task.courseId)?.name || "课程任务") : "事项"}</span></div></article>`).join("")}${!courses.length && !tasks.length ? '<div class="empty-state">这一天没有课程和事项</div>' : ""}</div>`;
 }
 
-function calendarItemsForDate(date) {
+function calendarItemsForDate(date, cache = null) {
   const key = localISO(date);
+  if (cache?.has(key)) return cache.get(key);
+  const context = { key, week: currentSemesterWeek(date), rule: calendarRuleForDate(date) };
   const tasks = data.tasks.filter((task) => !task.completed && (task.due === key || task.startDate === key));
-  const courses = data.courses.map((course) => courseOccurrence(course, date)).filter(Boolean).sort((a, b) => a.startSection - b.startSection);
-  return { key, tasks, courses, rule: calendarRuleForDate(date) };
+  const courses = data.courses.map((course) => courseOccurrence(course, date, context)).filter(Boolean).sort((a, b) => a.startSection - b.startSection);
+  const items = { key, tasks, courses, rule: context.rule };
+  cache?.set(key, items);
+  return items;
 }
 
 function monthGridDates(year, month) {
@@ -1386,10 +1390,12 @@ function monthGridDates(year, month) {
 }
 
 function renderYearCalendar() {
+  // Per-render cache includes overlap days between months and expires with this render.
+  const datesCache = new Map();
   $("#yearCalendar").innerHTML = `<div class="year-grid">${Array.from({ length: 12 }, (_, month) => {
     const dates = monthGridDates(displayedYear, month);
-    return `<section class="mini-month"><header><strong>${month + 1} 月</strong><span>${dates.reduce((sum, date) => sum + (date.getMonth() === month ? calendarItemsForDate(date).tasks.filter((task) => task.due === localISO(date)).length : 0), 0)} 个 DDL</span></header><div class="mini-weekdays">${["一","二","三","四","五","六","日"].map((day) => `<span>${day}</span>`).join("")}</div><div class="mini-days">${dates.map((date) => {
-      const items = calendarItemsForDate(date);
+    return `<section class="mini-month"><header><strong>${month + 1} 月</strong><span>${dates.reduce((sum, date) => sum + (date.getMonth() === month ? calendarItemsForDate(date, datesCache).tasks.filter((task) => task.due === localISO(date)).length : 0), 0)} 个 DDL</span></header><div class="mini-weekdays">${["一","二","三","四","五","六","日"].map((day) => `<span>${day}</span>`).join("")}</div><div class="mini-days">${dates.map((date) => {
+      const items = calendarItemsForDate(date, datesCache);
       const outside = date.getMonth() !== month;
       const deadlineCount = items.tasks.filter((task) => task.due === items.key).length;
       return `<button type="button" data-calendar-date="${items.key}" class="${outside ? "outside" : ""} ${items.key === localISO() ? "today" : ""} ${deadlineCount ? "has-ddl" : ""} ${items.courses.length ? "has-course" : ""} ${items.rule ? `has-rule ${items.rule.type}` : ""}" title="${escapeHTML([items.rule?.name, deadlineCount ? `${deadlineCount} 个 DDL` : "", items.courses.length ? `${items.courses.length} 门课` : ""].filter(Boolean).join(" · "))}"><span>${date.getDate()}</span>${deadlineCount ? `<i>${deadlineCount}</i>` : ""}</button>`;
@@ -1468,7 +1474,8 @@ function weekCalendarModel(start) {
 
   for (let day = 0; day < 7; day += 1) {
     const date = addDays(start, day);
-    data.courses.map((course) => courseOccurrence(course, date)).filter(Boolean).forEach((course) => {
+    const context = { key: localISO(date), week: currentSemesterWeek(date), rule: calendarRuleForDate(date) };
+    data.courses.map((course) => courseOccurrence(course, date, context)).filter(Boolean).forEach((course) => {
       const startSlot = slotByNumber(course.startSection);
       const endSlot = slotByNumber(course.endSection);
       if (!startSlot || !endSlot) return;
@@ -1498,13 +1505,102 @@ function weekCalendarModel(start) {
   return { timed, allDay };
 }
 
+// Preserve the saved course color; derive a readable identity color for calendars.
+function calendarSemanticColor(course = {}) {
+  let hex = String(course.color || "").trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(hex)) hex = [...hex].map((part) => part + part).join("");
+  if (/^[0-9a-f]{6}$/i.test(hex)) {
+    const [r, g, b] = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+    if (delta > 0.025) {
+      const hue = ((max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4) * 60 + 360) % 360;
+      return `hsl(${Math.round(hue)} 58% ${hue > 40 && hue < 80 ? 36 : 42}%)`;
+    }
+  }
+  let hash = 0;
+  for (const char of String(course.id || course.name || "course")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return `hsl(${[218, 164, 28, 274, 336, 193, 91][hash % 7]} 58% 42%)`;
+}
+
+function calendarTrackIndex(track, event = null) {
+  const count = Math.max(1, Number(track.dataset.trackCount));
+  if (event && (event.detail > 0 || event.type === "drop" || event.type === "dragover")) {
+    const rect = track.getBoundingClientRect();
+    if (rect.height) return Math.max(0, Math.min(count - 1, Math.floor((event.clientY - rect.top) / rect.height * count)));
+  }
+  return Math.max(0, Math.min(count - 1, Number(track.dataset.trackIndex) || 0));
+}
+
+function selectCalendarTrack(track, index) {
+  const count = Math.max(1, Number(track.dataset.trackCount));
+  index = Math.max(0, Math.min(count - 1, index));
+  const slot = track.dataset.calendarTrack === "timetable" ? data.timeSlots[index] : null;
+  const label = slot ? `${slot.startTime} 第 ${slot.number} 节` : minutesLabel(Number(track.dataset.trackStart) + index * 30);
+  track.dataset.trackIndex = String(index);
+  track.dataset.trackLabel = label;
+  track.style.setProperty("--track-selected-index", index);
+  track.style.setProperty("--track-selected-start", (100 * index / count) + "%");
+  track.setAttribute("aria-label", `${track.dataset.calendarSlotDate} ${label}，上下选择时段，左右切换日期，回车创建${slot ? "课程" : "日程"}`);
+  return index;
+}
+
+function createFromCalendarTrack(track, event = null) {
+  const index = selectCalendarTrack(track, calendarTrackIndex(track, event));
+  if (track.dataset.calendarTrack === "timetable") {
+    const slot = data.timeSlots[index];
+    if (!slot) return;
+    openCourseModal();
+    $("#courseDay").value = track.dataset.trackDay;
+    renderSectionOptions(slot.number, slot.number);
+    return;
+  }
+  const startMinutes = Number(track.dataset.trackStart) + index * 30;
+  const endMinutes = startMinutes + 60;
+  const date = track.dataset.calendarSlotDate;
+  openTaskModal("", null, { type: "event", startDate: date, startTime: minutesLabel(startMinutes), endDate: endMinutes >= 1440 ? localISO(addDays(dateFromISO(date), 1)) : date, endTime: minutesLabel(endMinutes % 1440), reminderMinutes: 10 });
+}
+
+function renderCalendarFocus(start, now = new Date()) {
+  let focus = $("#calendarFocus");
+  if (!focus && typeof document.createElement === "function") {
+    const wrap = $(".schedule-board-wrap");
+    if (typeof wrap.before !== "function") return;
+    focus = document.createElement("div"); focus.id = "calendarFocus"; focus.className = "calendar-focus";
+    wrap.before(focus);
+  }
+  if (!focus) return;
+  const supported = ["week", "timetable"].includes(scheduleMode);
+  calendarSetClass(focus, "hidden", !supported);
+  if (!supported) return;
+  const { timed } = weekCalendarModel(start);
+  const courses = timed.filter((item) => item.kind === "course").map((item) => {
+    const date = addDays(start, item.day); date.setHours(0, 0, 0, 0);
+    return { ...item, starts: date.getTime() + item.start * 60000, ends: date.getTime() + item.end * 60000 };
+  }).sort((a, b) => a.starts - b.starts);
+  const current = courses.find((item) => item.starts <= now.getTime() && item.ends > now.getTime());
+  const next = current || courses.find((item) => item.starts > now.getTime());
+  calendarSetClass(focus, "is-current", !!current);
+  calendarSetClass(focus, "is-next", !!next && !current);
+  if (!next) {
+    const html = `<span class="calendar-focus-label">${courses.length ? "本周课程" : "本周安排"}</span><strong class="calendar-focus-title">${courses.length ? `${courses.length} 节课程已结束` : "本周没有课程"}</strong><span class="calendar-focus-detail">全表看分布，清单看完整名称</span>`;
+    if (focus.calendarContent !== html) { focus.innerHTML = html; focus.calendarContent = html; }
+    return;
+  }
+  const date = addDays(start, next.day);
+  const color = calendarSemanticColor(courseById(next.id));
+  const html = `<span class="calendar-focus-label">${current ? "正在进行" : "下一节"}</span><button type="button" class="calendar-focus-course" data-course-id="${next.id}" style="--course-semantic-color:${color}"><strong class="calendar-focus-title">${escapeHTML(next.title)}</strong><span class="calendar-focus-detail">${formatDate(localISO(date))} ${minutesLabel(next.start)}–${minutesLabel(next.end)}${next.detail ? ` · ${escapeHTML(next.detail)}` : ""}</span></button>`;
+  if (focus.calendarContent !== html) { focus.innerHTML = html; focus.calendarContent = html; }
+}
+
 function renderWeekCalendar(start) {
   const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const { timed, allDay } = weekCalendarModel(start);
-  const startMinute = 7 * 60;
-  const endMinute = 23 * 60;
+  // Extend the visible day for early classes and late deadlines instead of dropping them.
+  const startMinute = Math.max(0, Math.floor(Math.min(7 * 60, ...timed.map((item) => item.start)) / 60) * 60);
+  const endMinute = Math.min(24 * 60, Math.ceil(Math.max(23 * 60, ...timed.map((item) => item.end)) / 60) * 60);
+  const rowCount = (endMinute - startMinute) / 30;
   const hasAllDay = allDay.some((items) => items.length);
-  let html = `<div class="calendar-week-grid ${hasAllDay ? "" : "no-all-day"}"><div class="calendar-week-corner">${hasAllDay ? "全天" : "时间"}</div>`;
+  let html = `<div class="calendar-week-grid ${hasAllDay ? "" : "no-all-day"}" data-row-count="${rowCount}" data-all-day-count="${Math.max(...allDay.map((items) => items.length))}" style="--calendar-row-count:${rowCount}"><div class="calendar-week-corner">${hasAllDay ? "全天" : "时间"}</div>`;
   for (let day = 0; day < 7; day += 1) {
     const date = addDays(start, day);
     const key = localISO(date);
@@ -1514,9 +1610,10 @@ function renderWeekCalendar(start) {
   for (let minute = startMinute; minute < endMinute; minute += 30) {
     const row = 3 + (minute - startMinute) / 30;
     if (minute % 60 === 0) html += `<div class="calendar-hour" style="grid-column:1;grid-row:${row}/span 2">${minutesLabel(minute)}</div>`;
-    for (let day = 0; day < 7; day += 1) {
-      html += `<button type="button" class="calendar-time-cell" data-calendar-past-date="${localISO(addDays(start, day))}" data-calendar-slot-date="${localISO(addDays(start, day))}" data-calendar-slot-time="${minutesLabel(minute)}" aria-label="${localISO(addDays(start, day))} ${minutesLabel(minute)} 新建日程" style="grid-column:${day + 2};grid-row:${row}"></button>`;
-    }
+  }
+  for (let day = 0; day < 7; day += 1) {
+    const key = localISO(addDays(start, day));
+    html += `<button type="button" class="calendar-day-track calendar-time-cell ${key === localISO() ? "today" : ""}" data-calendar-track="week" data-track-day="${day + 1}" data-track-count="${rowCount}" data-track-start="${startMinute}" data-track-index="0" data-track-label="${minutesLabel(startMinute)}" data-calendar-past-date="${key}" data-calendar-slot-date="${key}" aria-label="${key} ${minutesLabel(startMinute)}，上下选择时段，左右切换日期，回车创建日程" style="grid-column:${day + 2};grid-row:3/span ${rowCount};--track-count:${rowCount};--track-selected-index:0;--track-selected-start:0%"></button>`;
   }
   timed.forEach((item) => {
     if (item.end <= startMinute || item.start >= endMinute) return;
@@ -1526,8 +1623,10 @@ function renderWeekCalendar(start) {
     const span = Math.max(1, Math.ceil((visibleEnd - visibleStart) / 30));
     const attribute = item.kind === "course" ? `data-course-id="${item.id}"` : `data-task-id="${item.id}"`;
     const endAt = new Date(addDays(start, item.day));
-    endAt.setHours(0, item.end, 0, 0);
-    html += `<button type="button" class="calendar-week-event ${item.kind}" ${attribute} data-calendar-end="${endAt.getTime()}" style="grid-column:${item.day + 2};grid-row:${row}/span ${span};${item.color ? `--event-color:${item.color};` : ""}"><time>${minutesLabel(item.start)}</time><strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.detail || "")}</span></button>`;
+    const startAt = new Date(addDays(start, item.day));
+    endAt.setHours(0, item.end, 0, 0); startAt.setHours(0, item.start, 0, 0);
+    const semantic = item.kind === "course" ? calendarSemanticColor(courseById(item.id)) : item.kind === "deadline" ? "var(--q1)" : "var(--accent)";
+    html += `<button type="button" class="calendar-week-event ${item.kind}" ${attribute} data-calendar-start="${startAt.getTime()}" data-calendar-end="${endAt.getTime()}" aria-label="${escapeHTML(`${minutesLabel(item.start)}–${minutesLabel(item.end)} ${item.title} ${item.detail || ""}`)}" title="${escapeHTML(item.title)}" style="grid-column:${item.day + 2};grid-row:${row}/span ${span};${item.color ? `--event-color:${item.color};` : ""}--event-semantic-color:${semantic};"><time class="calendar-event-time">${minutesLabel(item.start)}</time><strong class="calendar-event-title">${escapeHTML(item.title)}</strong><span class="calendar-event-place">${escapeHTML(item.detail || "")}</span></button>`;
   });
   html += "</div>";
   $("#weekCalendar").innerHTML = html;
@@ -1535,9 +1634,18 @@ function renderWeekCalendar(start) {
 
 function refreshCalendarPast(now = new Date()) {
   const today = localISO(now);
-  $$("[data-calendar-past-date]").forEach((element) => element.classList.toggle("past", element.dataset.calendarPastDate < today));
-  $$("[data-calendar-end]").forEach((element) => element.classList.toggle("past", Number(element.dataset.calendarEnd) < now.getTime()));
-  $$(".month-day[data-calendar-date]").forEach((element) => element.classList.toggle("past", element.dataset.calendarDate < today));
+  $$("[data-calendar-past-date]").forEach((element) => calendarSetClass(element, "past", element.dataset.calendarPastDate < today));
+  $$("[data-calendar-end]").forEach((element) => {
+    const starts = Number(element.dataset.calendarStart), ends = Number(element.dataset.calendarEnd);
+    calendarSetClass(element, "past", ends < now.getTime());
+    const current = starts <= now.getTime() && ends > now.getTime();
+    calendarSetClass(element, "is-current", current);
+    calendarSetClass(element, "current", current);
+  });
+  $$(".month-day[data-calendar-date]").forEach((element) => calendarSetClass(element, "past", element.dataset.calendarDate < today));
+  const courses = $$("[data-course-id][data-calendar-start]", scheduleMode === "timetable" ? $("#scheduleBoard") : $("#weekCalendar"));
+  const next = courses.filter((element) => Number(element.dataset.calendarStart) > now.getTime()).sort((a, b) => Number(a.dataset.calendarStart) - Number(b.dataset.calendarStart))[0];
+  courses.forEach((element) => calendarSetClass(element, "is-next", element === next));
 }
 
 function calendarZoomValue() {
@@ -1545,37 +1653,132 @@ function calendarZoomValue() {
   return Number.isFinite(value) && value >= 0.35 && value <= 1.8 ? value : 0.8;
 }
 
-function applyCalendarZoom(value = calendarZoomValue(), anchor = null) {
+function calendarLayoutValue() {
+  const saved = localStorage.getItem(accountKey("fangcun-calendar-layout"));
+  return ["overview", "detail", "list"].includes(saved) ? saved : "overview";
+}
+
+function renderCalendarList(start) {
+  const { timed, allDay } = weekCalendarModel(start);
+  const dayCount = scheduleMode === "timetable" && !data.semester.showWeekend ? 5 : 7;
+  const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  $("#courseAgenda").innerHTML = '<p class="calendar-list-intro">完整名称与时间 · 点按查看详情</p>' + Array.from({ length: dayCount }, (_, day) => {
+    const items = [...allDay[day].map((item) => ({ ...item, start: -1 })), ...timed.filter((item) => item.day === day)]
+      .filter((item) => scheduleMode !== "timetable" || item.kind === "course").sort((a, b) => a.start - b.start);
+    const date = addDays(start, day);
+    return `<section class="calendar-list-day"><h3>${weekdays[day]} <span>${formatDate(localISO(date))}</span></h3>${items.length ? items.map((item) => {
+      const attribute = item.kind === "course" ? `data-course-id="${item.id}"` : `data-task-id="${item.id}"`;
+      return `<button type="button" class="calendar-list-item ${item.kind}" ${attribute} style="--event-color:${item.color || "var(--accent)"};--event-semantic-color:${item.kind === "course" ? calendarSemanticColor(courseById(item.id)) : item.kind === "deadline" ? "var(--q1)" : "var(--accent)"}"><time>${item.start < 0 ? "全天" : minutesLabel(item.start)}${item.end ? `<small>${minutesLabel(Math.min(1440, item.end))}</small>` : ""}</time><div><strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.detail || (item.kind === "deadline" ? "截止事项" : ""))}</span></div><span class="calendar-list-arrow" aria-hidden="true">›</span></button>`;
+    }).join("") : '<p class="calendar-list-empty">没有安排</p>'}</section>`;
+  }).join("");
+}
+
+let calendarPresentationSignature = "";
+function calendarSetAttribute(element, name, value) {
+  value = String(value);
+  if (element.getAttribute?.(name) !== value) element.setAttribute(name, value);
+}
+function calendarSetStyle(element, name, value) {
+  value = String(value);
+  if (element.style.getPropertyValue?.(name) !== value) element.style.setProperty(name, value);
+}
+function calendarSetClass(element, name, enabled) {
+  if (element.classList.contains(name) !== enabled) element.classList.toggle(name, enabled);
+}
+function updateCalendarPresentation(measured = null) {
+  const supported = ["week", "timetable"].includes(scheduleMode);
+  const layout = calendarLayoutValue();
+  const wrap = $(".schedule-board-wrap");
+  // Read geometry before touching classes, attributes or inline styles.
+  const width = measured?.width ?? wrap.clientWidth;
+  const height = measured?.height ?? wrap.clientHeight;
+  const left = measured?.left ?? wrap.scrollLeft, top = measured?.top ?? wrap.scrollTop;
+  const columns = scheduleMode === "timetable" && !data.semester.showWeekend ? 5 : 7;
+  const grid = $(".calendar-week-grid");
+  const rows = scheduleMode === "timetable" ? Math.max(1, data.timeSlots.length) : Number(grid?.dataset.rowCount) || 32;
+  const allDayCount = scheduleMode === "week" ? Number(grid?.dataset.allDayCount) || 0 : 0;
+  const zoom = supported && layout === "overview" && width ? Math.max(0.35, Math.min(1.8, (width - 40) / (columns * 120))) : calendarZoomValue();
+  const signature = JSON.stringify([scheduleMode, layout, width, height, columns, rows, allDayCount, zoom]);
+  if (calendarPresentationSignature === signature) return;
+  calendarPresentationSignature = signature;
+  if (wrap.dataset.calendarLayout !== layout) wrap.dataset.calendarLayout = layout;
+  calendarSetClass($("#scheduleBoard"), "hidden", scheduleMode !== "timetable" || layout === "list");
+  calendarSetClass($("#weekCalendar"), "hidden", scheduleMode !== "week" || layout === "list");
+  calendarSetClass($("#courseAgenda"), "hidden", !supported || layout !== "list");
+  const listButton = $("#calendarListBtn");
+  if (listButton) {
+    calendarSetClass(listButton, "hidden", !supported);
+    calendarSetAttribute(listButton, "aria-pressed", layout === "list");
+  }
+  const fit = $("#calendarZoomFit");
+  if (fit.textContent !== "全表") fit.textContent = "全表";
+  calendarSetAttribute(fit, "aria-pressed", layout === "overview");
+  calendarSetAttribute(fit, "aria-label", "显示完整一周与全部时段");
+  calendarSetAttribute(fit, "title", "适应可用宽度与高度；清单可阅读完整名称");
+  const outDisabled = layout === "detail" && zoom <= 0.35, inDisabled = layout === "detail" && zoom >= 1.8;
+  if ($("#calendarZoomOut").disabled !== outDisabled) $("#calendarZoomOut").disabled = outDisabled;
+  if ($("#calendarZoomIn").disabled !== inDisabled) $("#calendarZoomIn").disabled = inDisabled;
+  if (supported && layout !== "overview") calendarSetStyle(wrap, "--track-step", (scheduleMode === "timetable" ? 48 * zoom : Math.max(14, 28 * zoom)) + "px");
+  if (!supported || layout !== "overview" || !width || !height) return;
+  const allDayHeight = allDayCount ? Math.min(66, Math.max(24, height * 0.12)) : 0;
+  const step = Math.max(1, (height - 34 - allDayHeight - 1) / rows);
+  calendarSetStyle(wrap, "--calendar-fit-step", step + "px");
+  calendarSetStyle(wrap, "--track-step", step + "px");
+  calendarSetStyle(wrap, "--calendar-fit-all-day", allDayHeight + "px");
+  calendarSetStyle(wrap, "--calendar-fit-height", (height - 1) + "px");
+  const density = step < (scheduleMode === "timetable" ? 34 : 13) ? "dense" : "normal";
+  if (wrap.dataset.calendarDensity !== density) wrap.dataset.calendarDensity = density;
+  if (wrap.dataset.zoom !== String(zoom)) wrap.dataset.zoom = String(zoom);
+  const zoomKey = accountKey("fangcun-calendar-zoom");
+  if (localStorage.getItem(zoomKey) !== String(zoom)) localStorage.setItem(zoomKey, String(zoom));
+  if (left) wrap.scrollLeft = 0;
+  if (top) wrap.scrollTop = 0;
+}
+
+function setCalendarLayout(layout) {
+  localStorage.setItem(accountKey("fangcun-calendar-layout"), layout);
+  if (layout === "list") {
+    renderCalendarList(weekStartDate(displayedWeek));
+    bindDynamicEvents();
+  }
+  updateCalendarPresentation();
+  $(".schedule-board-wrap").scrollTop = 0;
+}
+
+function applyCalendarZoom(value = calendarZoomValue(), anchor = null, dimensions = null) {
   const zoom = Math.max(0.35, Math.min(1.8, value));
   const wrap = $(".schedule-board-wrap");
+  const measured = dimensions || { width: wrap.clientWidth, height: wrap.clientHeight, left: wrap.scrollLeft, top: wrap.scrollTop };
   const old = Number(wrap.dataset.zoom) || calendarZoomValue();
-  const center = anchor || { x: wrap.clientWidth / 2, y: wrap.clientHeight / 2 };
-  const left = wrap.scrollLeft, top = wrap.scrollTop;
-  wrap.dataset.zoom = String(zoom);
-  wrap.style.setProperty("--calendar-scale", zoom);
-  wrap.style.setProperty("--calendar-step", Math.max(14, 28 * zoom) + "px");
-  wrap.style.setProperty("--calendar-day-width", (120 * zoom) + "px");
-  wrap.style.setProperty("--calendar-slot-height", (48 * zoom) + "px");
+  const { left, top } = measured;
+  if (anchor && calendarLayoutValue() !== "detail") localStorage.setItem(accountKey("fangcun-calendar-layout"), "detail");
+  if (wrap.dataset.zoom !== String(zoom)) wrap.dataset.zoom = String(zoom);
+  calendarSetStyle(wrap, "--calendar-scale", zoom);
+  calendarSetStyle(wrap, "--calendar-step", Math.max(14, 28 * zoom) + "px");
+  calendarSetStyle(wrap, "--calendar-day-width", (120 * zoom) + "px");
+  calendarSetStyle(wrap, "--calendar-slot-height", (48 * zoom) + "px");
+  const zoomKey = accountKey("fangcun-calendar-zoom");
+  if (localStorage.getItem(zoomKey) !== String(zoom)) localStorage.setItem(zoomKey, String(zoom));
+  updateCalendarPresentation(measured);
   if (anchor) {
-    wrap.scrollLeft = (left + center.x) * zoom / old - center.x;
-    wrap.scrollTop = (top + center.y) * zoom / old - center.y;
+    wrap.scrollLeft = (left + anchor.x) * zoom / old - anchor.x;
+    wrap.scrollTop = (top + anchor.y) * zoom / old - anchor.y;
   }
-  $("#calendarZoomFit").textContent = Math.round(zoom * 100) + "%";
-  $("#calendarZoomFit").setAttribute("aria-label", "当前缩放 " + Math.round(zoom * 100) + "%，点击适应屏幕宽度");
-  $("#calendarZoomOut").disabled = zoom <= 0.35;
-  $("#calendarZoomIn").disabled = zoom >= 1.8;
-  localStorage.setItem(accountKey("fangcun-calendar-zoom"), String(zoom));
 }
 
 function initCalendarZoom() {
   const wrap = $(".schedule-board-wrap");
   $("#calendarZoomOut").addEventListener("click", () => applyCalendarZoom(calendarZoomValue() - 0.1, { x: wrap.clientWidth / 2, y: wrap.clientHeight / 2 }));
   $("#calendarZoomIn").addEventListener("click", () => applyCalendarZoom(calendarZoomValue() + 0.1, { x: wrap.clientWidth / 2, y: wrap.clientHeight / 2 }));
-  $("#calendarZoomFit").addEventListener("click", () => { applyCalendarZoom((wrap.clientWidth - 44) / (7 * 120)); wrap.scrollLeft = 0; });
+  $("#calendarZoomFit").addEventListener("click", () => setCalendarLayout("overview"));
+  $("#calendarListBtn")?.addEventListener("click", () => setCalendarLayout(calendarLayoutValue() === "list" ? "overview" : "list"));
+  // A single observer reacts to rotation, native safe-area changes and toolbar wrapping.
+  // It changes track sizes only; it never rebuilds course nodes or runs an animation loop.
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => updateCalendarPresentation()).observe(wrap);
   let pinch = null;
   const distance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
   wrap.addEventListener("touchstart", (event) => {
-    if (event.touches.length !== 2 || !["week", "timetable"].includes(scheduleMode)) return;
+    if (event.touches.length !== 2 || !["week", "timetable"].includes(scheduleMode) || calendarLayoutValue() === "list") return;
     event.preventDefault();
     pinch = { distance: distance(event.touches), zoom: calendarZoomValue() };
   }, { passive: false });
@@ -1589,13 +1792,36 @@ function initCalendarZoom() {
   wrap.addEventListener("touchend", end);
   wrap.addEventListener("touchcancel", end);
   wrap.addEventListener("wheel", (event) => {
-    if (!event.ctrlKey || !["week", "timetable"].includes(scheduleMode)) return;
+    if (!event.ctrlKey || !["week", "timetable"].includes(scheduleMode) || calendarLayoutValue() === "list") return;
     event.preventDefault();
     applyCalendarZoom(calendarZoomValue() + (event.deltaY < 0 ? 0.05 : -0.05), { x: event.offsetX, y: event.offsetY });
   }, { passive: false });
 }
 
+let calendarContentSignature = "";
+function calendarRenderSignature() {
+  return JSON.stringify([
+    accountKey("calendar-content"), scheduleMode, displayedWeek, displayedYear, displayedMonth, displayedDay,
+    localISO(), calendarLayoutValue() === "list", data.semester, data.timeSlots,
+    data.courses.map((course) => [course.id, course.name, course.code, course.campus, course.teacher, course.location, course.day, course.startSection, course.endSection, course.weeks, course.color]),
+    data.tasks.map((task) => [task.id, task.title, task.type, task.completed, task.startDate, task.startTime, task.endDate, task.endTime, task.estimateMinutes, task.due, task.dueTime, task.location, task.courseId]),
+    data.courseExceptions, data.calendarRules,
+  ]);
+}
+
 function renderSchedule() {
+  const signature = calendarRenderSignature();
+  if (calendarContentSignature === signature) {
+    updateCalendarPresentation();
+    refreshCalendarPast();
+    renderCalendarFocus(weekStartDate(displayedWeek));
+    return;
+  }
+  // Capture the existing container before replacing its children. ResizeObserver
+  // corrects geometry if the toolbar or focus strip changes its available size.
+  const wrap = $(".schedule-board-wrap");
+  const dimensions = { width: wrap.clientWidth, height: wrap.clientHeight, left: wrap.scrollLeft, top: wrap.scrollTop };
+  calendarPresentationSignature = "";
   $("#scheduleView").dataset.mode = scheduleMode;
   const start = weekStartDate(displayedWeek);
   const end = addDays(start, 6);
@@ -1615,54 +1841,53 @@ function renderSchedule() {
   $("#weekRange").textContent = titles[scheduleMode]?.[1] || titles.week[1];
   $("#prevWeekBtn").disabled = false;
   $("#nextWeekBtn").disabled = false;
-  renderDeadlineRadar();
-  renderWeekCalendar(start);
+  renderCalendarFocus(start);
+  if (scheduleMode === "week") renderWeekCalendar(start);
 
   const board = $("#scheduleBoard");
   board.style.setProperty("--day-count", dayCount);
-  let html = '<div class="schedule-corner" style="grid-column:1;grid-row:1">节次 / 日期</div>';
-  for (let day = 1; day <= dayCount; day += 1) {
-    const date = addDays(start, day - 1);
-    const isToday = localISO(date) === localISO();
-    const rule = calendarRuleForDate(date);
-    html += `<div class="schedule-day-head ${isToday ? "today" : ""} ${rule ? `has-rule ${rule.type}` : ""}" style="grid-column:${day + 1};grid-row:1"><strong>${weekdays[day - 1]}</strong><span>${date.getMonth() + 1}/${date.getDate()}${rule ? ` · ${escapeHTML(rule.name)}` : ""}</span></div>`;
-  }
-  data.timeSlots.forEach((slot, rowIndex) => {
-    html += `<div class="schedule-time" style="grid-column:1;grid-row:${rowIndex + 2}"><strong>${slot.number}</strong><span>${escapeHTML(slot.startTime)}<br>${escapeHTML(slot.endTime)}</span></div>`;
+  // Build the dense course grid only when it is visible.
+  if (scheduleMode === "timetable") {
+    let html = '<div class="schedule-corner" style="grid-column:1;grid-row:1">时间</div>';
     for (let day = 1; day <= dayCount; day += 1) {
       const date = addDays(start, day - 1);
-      html += `<div class="schedule-cell ${localISO(date) === localISO() ? "today" : ""}" data-course-drop-day="${day}" data-course-drop-section="${slot.number}" style="grid-column:${day + 1};grid-row:${rowIndex + 2}"></div>`;
+      const isToday = localISO(date) === localISO();
+      const rule = calendarRuleForDate(date);
+      html += `<div class="schedule-day-head ${isToday ? "today" : ""} ${rule ? `has-rule ${rule.type}` : ""}" style="grid-column:${day + 1};grid-row:1"><strong>${weekdays[day - 1]}</strong><span>${date.getMonth() + 1}/${date.getDate()}${rule ? ` · ${escapeHTML(rule.name)}` : ""}</span></div>`;
     }
-  });
-  const weekCourses = [];
-  for (let day = 1; day <= dayCount; day += 1) {
-    const date = addDays(start, day - 1);
-    data.courses.forEach((course) => {
-      const occurrence = courseOccurrence(course, date);
-      if (occurrence) weekCourses.push({ ...occurrence, day, occurrenceDate: localISO(date) });
+    data.timeSlots.forEach((slot, rowIndex) => {
+      html += `<div class="schedule-time" style="grid-column:1;grid-row:${rowIndex + 2}"><strong>${slot.number}</strong><span><time>${escapeHTML(slot.startTime)}</time><time>${escapeHTML(slot.endTime)}</time></span></div>`;
     });
-  }
-  weekCourses.forEach((course) => {
-    const startIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.startSection));
-    const endIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.endSection));
-    if (startIndex < 0 || endIndex < 0) return;
-    const date = addDays(start, course.day - 1);
-    const now = new Date();
-    const startSlot = slotByNumber(course.startSection);
-    const endSlot = slotByNumber(course.endSection);
-    const startAt = new Date(`${localISO(date)}T${startSlot.startTime}:00`);
-    const endAt = new Date(`${localISO(date)}T${endSlot.endTime}:00`);
-    const state = now > endAt ? "past" : now >= startAt && now <= endAt ? "current" : "";
-    html += `<button class="course-block ${state}" draggable="true" data-course-id="${course.id}" style="--course-color:${course.color};grid-column:${course.day + 1};grid-row:${startIndex + 2}/${endIndex + 3}"><strong>${escapeHTML(course.name)}${course.occurrenceChanged ? " · 调" : ""}</strong><span>${escapeHTML(coursePlace(course) || "地点待定")}</span><span>${escapeHTML(courseTimeText(course))}</span></button>`;
-  });
-  board.innerHTML = html;
+    for (let day = 1; day <= dayCount; day += 1) {
+      const key = localISO(addDays(start, day - 1)), count = data.timeSlots.length;
+      if (!count) continue;
+      html += `<div class="schedule-day-track schedule-cell ${key === localISO() ? "today" : ""}" role="button" tabindex="0" data-calendar-track="timetable" data-track-day="${day}" data-track-count="${count}" data-track-index="0" data-track-label="${data.timeSlots[0].startTime}" data-course-drop-day="${day}" data-calendar-slot-date="${key}" aria-label="${key} ${data.timeSlots[0].startTime}，上下选择节次，左右切换日期，回车创建课程" style="grid-column:${day + 1};grid-row:2/span ${count};--track-count:${count};--track-selected-index:0;--track-selected-start:0%"></div>`;
+    }
+    const weekCourses = [];
+    for (let day = 1; day <= dayCount; day += 1) {
+      const date = addDays(start, day - 1);
+      data.courses.forEach((course) => {
+        const occurrence = courseOccurrence(course, date);
+        if (occurrence) weekCourses.push({ ...occurrence, day, occurrenceDate: localISO(date) });
+      });
+    }
+    weekCourses.forEach((course) => {
+      const startIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.startSection));
+      const endIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.endSection));
+      if (startIndex < 0 || endIndex < 0) return;
+      const date = addDays(start, course.day - 1);
+      const now = new Date();
+      const startSlot = slotByNumber(course.startSection);
+      const endSlot = slotByNumber(course.endSection);
+      const startAt = new Date(`${localISO(date)}T${startSlot.startTime}:00`);
+      const endAt = new Date(`${localISO(date)}T${endSlot.endTime}:00`);
+      const state = now > endAt ? "past" : now >= startAt && now <= endAt ? "current" : "";
+      html += `<button class="course-block ${state}" draggable="true" data-course-id="${course.id}" data-calendar-start="${startAt.getTime()}" data-calendar-end="${endAt.getTime()}" aria-label="${escapeHTML(`${course.name} ${courseTimeText(course)} ${coursePlace(course) || "地点待定"}`)}" title="${escapeHTML(course.name)}" style="--course-color:${course.color};--course-semantic-color:${calendarSemanticColor(course)};grid-column:${course.day + 1};grid-row:${startIndex + 2}/${endIndex + 3}"><strong class="calendar-event-title">${escapeHTML(course.name)}${course.occurrenceChanged ? " · 调" : ""}</strong><span class="calendar-event-place">${escapeHTML(coursePlace(course) || "地点待定")}</span><span class="calendar-event-time">${escapeHTML(courseTimeText(course))}</span></button>`;
+    });
+    board.innerHTML = html;
 
-  $("#courseAgenda").innerHTML = Array.from({ length: dayCount }, (_, index) => index + 1).map((day) => {
-    const date = addDays(start, day - 1);
-    const courses = weekCourses.filter((course) => course.day === day).sort((a, b) => a.startSection - b.startSection);
-    if (!courses.length) return "";
-    return `<section class="agenda-day"><h3>${weekdays[day - 1]} · ${formatDate(localISO(date))}</h3>${courses.map((course) => `<article class="agenda-course" data-course-id="${course.id}" style="--course-color:${course.color}"><time>${escapeHTML(courseTimeText(course))}</time><i></i><div><strong>${escapeHTML(course.name)}</strong><span>${escapeHTML([course.code, course.teacher, coursePlace(course)].filter(Boolean).join(" · ") || "暂无详细信息")}</span></div><em>${formatWeeks(course.weeks)}周</em></article>`).join("")}</section>`;
-  }).join("") || '<div class="empty-state" style="margin:20px">这一周没有课程。</div>';
+  }
+  if (calendarLayoutValue() === "list" && ["week", "timetable"].includes(scheduleMode)) renderCalendarList(start);
   if (scheduleMode === "day") renderDaySchedule(mondayOf(dateFromISO(displayedDay)), 7);
   if (scheduleMode === "year") renderYearCalendar();
   if (scheduleMode === "month") renderMonthCalendar();
@@ -1676,8 +1901,9 @@ function renderSchedule() {
   $("#weekDeadlines").classList.toggle("hidden", scheduleMode !== "timetable");
   $$("[data-schedule-mode]").forEach((button) => button.classList.toggle("active", button.dataset.scheduleMode === scheduleMode));
   $(".calendar-zoom-tools").classList.toggle("hidden", !["week", "timetable"].includes(scheduleMode));
-  applyCalendarZoom();
+  applyCalendarZoom(calendarZoomValue(), null, dimensions);
   refreshCalendarPast();
+  calendarContentSignature = signature;
 }
 
 function projectMetrics(project) {
@@ -1767,11 +1993,17 @@ function renderDailyTip() {
   $("#dailyTipAction").dataset.tipView = tip.view;
 }
 
-let dynamicEventsController;
+// Weak ownership lets removed cards and their closures be collected. Retained
+// calendar/dialog nodes keep their handlers instead of aborting and rebinding all.
+const dynamicEventBindings = new WeakMap();
 function bindDynamicEvents() {
-  dynamicEventsController?.abort();
-  dynamicEventsController = new AbortController();
-  const listen = (target, type, handler) => target.addEventListener(type, handler, { signal: dynamicEventsController.signal });
+  const listen = (target, type, handler) => {
+    let types = dynamicEventBindings.get(target);
+    if (!types) { types = new Set(); dynamicEventBindings.set(target, types); }
+    if (types.has(type)) return;
+    types.add(type);
+    target.addEventListener(type, handler);
+  };
   $$('[data-focus-pin]').forEach((button) => listen(button, "click", (event) => {
     event.stopPropagation();
     const task = data.tasks.find((item) => item.id === button.dataset.focusPin);
@@ -1789,11 +2021,25 @@ function bindDynamicEvents() {
     showToast("今天先不推荐这件事");
   }));
   $$('[data-inbox-reparse]').forEach((button) => listen(button, "click", (event) => { event.stopPropagation(); reparseInboxTask(button.dataset.inboxReparse); }));
-  $$('[data-calendar-slot-date]').forEach((button) => listen(button, "click", () => {
-    const start = button.dataset.calendarSlotTime;
-    const endMinutes = timeMinutes(start) + 60;
-    openTaskModal("", null, { type: "event", startDate: button.dataset.calendarSlotDate, startTime: start, endDate: button.dataset.calendarSlotDate, endTime: minutesLabel(endMinutes), reminderMinutes: 10 });
-  }));
+  $$('[data-calendar-track]').forEach((track) => {
+    listen(track, "click", (event) => createFromCalendarTrack(track, event));
+    listen(track, "keydown", (event) => {
+      const key = event.key, index = calendarTrackIndex(track);
+      if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(key)) {
+        event.preventDefault();
+        const count = Number(track.dataset.trackCount);
+        const next = key === "Home" ? 0 : key === "End" ? count - 1 : index + (key === "ArrowDown" ? 1 : key === "ArrowUp" ? -1 : key === "PageDown" ? 2 : -2);
+        selectCalendarTrack(track, next);
+      } else if (key === "ArrowLeft" || key === "ArrowRight") {
+        event.preventDefault();
+        const tracks = $$('[data-calendar-track]', track.parentElement);
+        const sibling = tracks[tracks.indexOf(track) + (key === "ArrowRight" ? 1 : -1)];
+        if (sibling) { selectCalendarTrack(sibling, index); sibling.focus(); }
+      } else if (key === "Enter" || key === " ") {
+        event.preventDefault(); createFromCalendarTrack(track);
+      }
+    });
+  });
   $$('[data-calendar-all-day]').forEach((element) => listen(element, "click", (event) => {
     if (event.target.closest('[data-task-id]')) return;
     openTaskModal("", null, { type: "event", startDate: element.dataset.calendarAllDay });
@@ -1869,7 +2115,7 @@ function bindDynamicEvents() {
     }
   });
   $$("[data-course-drop-day]").forEach((cell) => {
-    listen(cell, "dragover", (event) => { event.preventDefault(); cell.classList.add("drag-over"); });
+    listen(cell, "dragover", (event) => { event.preventDefault(); cell.classList.add("drag-over"); if (cell.dataset.calendarTrack) selectCalendarTrack(cell, calendarTrackIndex(cell, event)); });
     listen(cell, "dragleave", () => cell.classList.remove("drag-over"));
     listen(cell, "drop", (event) => {
       event.preventDefault();
@@ -1877,7 +2123,9 @@ function bindDynamicEvents() {
       const course = courseById(window.draggedCourseId);
       if (!course) return;
       const span = Math.max(0, data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.endSection)) - data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.startSection)));
-      const startIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(cell.dataset.courseDropSection));
+      const requestedIndex = cell.dataset.calendarTrack ? calendarTrackIndex(cell, event) : data.timeSlots.findIndex((slot) => Number(slot.number) === Number(cell.dataset.courseDropSection));
+      const startIndex = Math.max(0, Math.min(requestedIndex, data.timeSlots.length - span - 1));
+      if (!data.timeSlots[startIndex]) return;
       course.day = Number(cell.dataset.courseDropDay);
       course.startSection = data.timeSlots[startIndex].number;
       course.endSection = data.timeSlots[Math.min(startIndex + span, data.timeSlots.length - 1)].number;
@@ -1888,11 +2136,11 @@ function bindDynamicEvents() {
 }
 
 function renderAll() {
-  renderQuadrants();
-  renderInbox();
-  renderToday();
+  if (activeView === "matrix") renderQuadrants();
+  if (activeView === "inbox") renderInbox();
+  if (activeView === "today") renderToday();
   if (activeView === "schedule") renderSchedule();
-  renderProjects();
+  if (activeView === "projects") renderProjects();
   renderCounts();
   renderDailyTip();
   renderProjectOptions();
@@ -1911,6 +2159,7 @@ function showToast(message) {
 
 function switchView(view) {
   if (!viewInfo[view] || !$(`#${view}View`)) view = "today";
+  const changingView = view !== activeView;
   const enteringSchedule = view === "schedule" && activeView !== "schedule";
   activeView = view;
   const menuHost = view === "schedule" ? $(".week-toolbar") : $(".topbar");
@@ -1927,6 +2176,7 @@ function switchView(view) {
   if (activePanel) activePanel.scrollTop = 0;
   if (typeof window.scrollTo === "function") window.scrollTo({ top: 0, behavior: "smooth" });
   if (enteringSchedule) renderAll();
+  else if (changingView) renderAll();
 }
 
 function selectMobileQuadrant(quadrant, scroll = true) {
@@ -1991,11 +2241,13 @@ function updateDecisionUI() {
 function renderProjectOptions() {
   const select = $("#taskProject");
   const current = select.value;
-  select.innerHTML = '<option value="">无项目</option>' + data.projects.map((project) => `<option value="${project.id}">${escapeHTML(project.name)}</option>`).join("");
+  const projectOptions = '<option value="">无项目</option>' + data.projects.map((project) => `<option value="${project.id}">${escapeHTML(project.name)}</option>`).join("");
+  if (select.fangcunOptionsHTML !== projectOptions) { select.innerHTML = projectOptions; select.fangcunOptionsHTML = projectOptions; }
   select.value = data.projects.some((project) => project.id === current) ? current : "";
   const courseSelect = $("#taskCourse");
   const currentCourse = courseSelect.value;
-  courseSelect.innerHTML = '<option value="">无课程</option>' + data.courses.map((course) => `<option value="${course.id}">${escapeHTML(course.name)}</option>`).join("");
+  const courseOptions = '<option value="">无课程</option>' + data.courses.map((course) => `<option value="${course.id}">${escapeHTML(course.name)}</option>`).join("");
+  if (courseSelect.fangcunOptionsHTML !== courseOptions) { courseSelect.innerHTML = courseOptions; courseSelect.fangcunOptionsHTML = courseOptions; }
   courseSelect.value = data.courses.some((course) => course.id === currentCourse) ? currentCourse : "";
 }
 
@@ -2029,8 +2281,18 @@ function openTaskModal(taskId = "", presetQuadrant = null, preset = {}) {
   $("#modalTitle").textContent = task ? "调整下一步行动" : "把想法变成行动";
   $("#deleteTaskBtn").classList.toggle("hidden", !task);
   updateDecisionUI();
-  $("#taskModal").showModal();
-  setTimeout(() => $("#taskTitle").focus(), 40);
+  const modal = $("#taskModal");
+  modal.showModal();
+  const initialFocus = document.activeElement;
+  const autofocus = new AbortController();
+  const cancelAutofocus = () => autofocus.abort();
+  // Delayed initial focus must not take over a user's newly opened control.
+  for (const type of ["pointerdown", "keydown"]) modal.addEventListener(type, cancelAutofocus, { capture: true, once: true, signal: autofocus.signal });
+  setTimeout(() => {
+    const untouched = !autofocus.signal.aborted && modal.open && document.activeElement === initialFocus;
+    autofocus.abort();
+    if (untouched) $("#taskTitle").focus();
+  }, 40);
 }
 
 function saveTask(event) {
@@ -3836,7 +4098,7 @@ function init() {
   updateLiveClock();
   setInterval(updateLiveClock, 1000);
   setInterval(checkReminders, 60000);
-  setInterval(() => { if (activeView === "schedule") refreshCalendarPast(); }, 60000);
+  setInterval(() => { if (activeView === "schedule") { refreshCalendarPast(); renderCalendarFocus(weekStartDate(displayedWeek)); bindDynamicEvents(); } }, 60000);
 }
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {

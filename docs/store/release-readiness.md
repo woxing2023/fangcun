@@ -22,7 +22,7 @@
 4. **长期签名**：离线生成并双份备份正式 keystore；首次上架后所有升级必须使用同一密钥。仓库和发布包都不得包含密钥或密码。
 5. **生产部署**：上传服务器包，继续仅监听 `127.0.0.1:18443`，通过 Cloudflare Tunnel 提供 HTTPS；将 `FANGCUN_STORE_RELEASE=true` 后执行部署验收。
 6. **审核账号**：在生产环境创建不含真实数据的专用普通用户账号，把账号密码只填进商店审核后台，并确认全部主要板块可访问。
-7. **商店素材**：由正式包截取至少 4 张不重复截图，准备图标、简介、介绍、更新说明和权限说明；Robin 做视觉终审。
+7. **商店素材**：由正式包截取至少 4 张不重复截图，准备图标、简介、介绍、更新说明和权限说明；视觉审核负责人 做视觉终审。
 8. **真机与线上验收**：至少覆盖一台目标小米/HyperOS 手机的冷启动、弱网、快速点击、横竖屏、权限拒绝、升级和注销；完成 `device-qa.md`，同时验证公网隐私政策和 API。
 
 ## 判定标准
@@ -38,7 +38,7 @@
 powershell -ExecutionPolicy Bypass -File .\deploy\store-preflight.ps1 `
   -ApkPath .\release\fangcun-v2.7.0-release.apk `
   -ScreenshotDirectory .\store-assets\screenshots `
-  -PublicOrigin https://fangcun.example.org
+  -PublicOrigin https://calendar.example.invalid
 ```
 
 该脚本会重跑全部测试、检查公网隐私政策无占位值、拒绝 debug 证书、验证 APK 对齐与签名，并要求至少 4 张内容不同的截图。资质真实性和真机体验仍需人工审核。

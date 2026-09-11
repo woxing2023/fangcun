@@ -1,27 +1,16 @@
 # 方寸 2.7.0 交付与上线清单
 
-## 交付物
+## 本次交付物
 
-- `release/fangcun-v2.7.0-debug.apk`：个人测试与覆盖安装包。
-- `release/fangcun-release-2.7.0.tar.gz`：阿里云服务器升级包。
+- `release/fangcun-release-2.7.0-calendar3.tar.gz`：服务器源码升级包。
+- `release/fangcun-SHA256SUMS-20260911-calendar3.txt`：对应 SHA-256 校验文件。
+- 构建标识：`20260911-calendar-v3`；GitHub Release tag：`fangcun-deploy-20260911-calendar-v3`。
 
-升级不会主动开放公网端口。服务继续只监听 `127.0.0.1:18443`，公网入口仍由现有 Cloudflare Tunnel 提供。
+本次只在本地检查、打包和交付，未执行远端上传或部署。Hermes 负责 GitHub Release 上传与 Workbench 下载、校验、升级。暂存目录使用随机临时目录或 `$HOME`，不依赖固定登录账户路径。
 
-## 阿里云 Workbench 手动升级
+完整命令及保留业务数据的回滚步骤见 [Workbench 交接说明](workbench-xuan.md)。服务继续只监听 `127.0.0.1:18443`，沿用现有 Cloudflare Tunnel，不修改 nginx、hysteria2 或公网端口。
 
-先把服务器包上传到 `/home/admin/`，然后执行：
-
-```bash
-install -d -m 0700 /home/admin/fangcun-2.7.0
-tar -xzf /home/admin/fangcun-release-2.7.0.tar.gz -C /home/admin/fangcun-2.7.0
-cd /home/admin/fangcun-2.7.0
-sudo bash deploy/backup.sh
-sudo bash deploy/install.sh
-sudo bash deploy/verify.sh
-curl --fail --silent http://127.0.0.1:18443/api/health
-```
-
-首次安装、尚无 `/var/lib/fangcun/fangcun.sqlite` 时省略 `backup.sh`。升级完成后不要删除 `/var/backups/fangcun/` 中的升级前快照。
+本次更新网页资源，没有新建 Android 壳或重新生成 APK。下面保留已有 APK 的安装与权限说明；是否需要安装取决于设备上已有壳的版本。
 
 ## APK 安装与小米权限
 

@@ -1,0 +1,161 @@
+/* Layer order is explicit: mobile corrections outrank legacy material paint.
+   The desktop styling remains in xuan.css and liquid.css. */
+@layer mobile-ui, mobile-material, mobile-calendar, xuan-material, liquid-material;
+
+@layer mobile-ui {
+  /* Inline theme choices keep the existing select as the preference source. */
+  html body .appearance-mode-source {
+    position:absolute !important; width:1px !important; height:1px !important;
+    min-height:1px !important; margin:0 !important; padding:0 !important;
+    overflow:hidden !important; clip-path:inset(50%) !important;
+    white-space:nowrap !important; opacity:0 !important; pointer-events:none !important;
+  }
+  html body .appearance-modes { min-width:0; border:0; padding:0; margin:0; }
+  html body .appearance-modes legend { padding:0; margin-bottom:10px; font-size:13px; font-weight:550; }
+  html body .appearance-mode-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  html body .appearance-mode-option {
+    display:flex !important; align-items:center !important; gap:9px; min-width:0; min-height:48px;
+    padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+    color:var(--ink); background:var(--card); font-size:14px; cursor:pointer;
+  }
+  html body .appearance-mode-option input { position:static !important; flex:0 0 17px !important; width:17px !important; height:17px !important; min-height:17px !important; margin:0 0 0 auto !important; order:2 !important; accent-color:var(--accent); }
+  html body .appearance-mode-option:has(:checked) { border-color:var(--accent); background:var(--accent-soft); }
+  html body .appearance-mode-option:has(:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
+  html body .appearance-modes:has(.appearance-mode-options) .liquid-select-trigger { display:none !important; }
+  html body #appearanceModal { width:min(480px,calc(100% - 24px)); }
+  html body #appearanceModal .skin-options { min-width:0; gap:10px; }
+  html body #appearanceModal .skin-option { min-width:0; overflow:hidden; border-radius:14px; }
+  html body #appearanceModal .skin-option small { overflow-wrap:anywhere; }
+
+  @media (max-width:960px), (pointer:coarse) {
+    /* Dense lists size each record to its actual text, never to leftover space. */
+    html body .task-list {
+      display:flex !important; flex-direction:column !important; gap:8px !important;
+      align-items:stretch !important; justify-content:flex-start !important;
+      min-height:0 !important; max-height:none !important; overflow-y:auto !important;
+      overflow-x:hidden !important; padding:1px 0 8px !important;
+    }
+    html body .task-card {
+      position:relative !important; display:block !important;
+      flex:0 0 auto !important; width:100% !important; min-width:0 !important;
+      height:auto !important; min-height:82px !important; max-height:none !important;
+      margin:0 !important; padding:12px 54px 12px 13px !important;
+      border-radius:12px !important; overflow:hidden !important;
+      transform:none !important;
+    }
+    html body .task-card h4 {
+      display:block !important; min-width:0 !important; height:auto !important;
+      margin:0 0 8px !important; padding:0 !important; max-height:none !important;
+      font-size:14px !important; font-weight:550 !important; line-height:1.5 !important;
+      white-space:normal !important; overflow-wrap:anywhere !important;
+      word-break:normal !important; text-overflow:clip !important;
+      -webkit-line-clamp:unset !important; overflow:visible !important;
+    }
+    html body .task-card .task-meta {
+      display:flex !important; flex-wrap:wrap !important; gap:4px 6px !important;
+      min-width:0 !important; height:auto !important; overflow:visible !important;
+      white-space:normal !important; line-height:1.45 !important;
+    }
+    html body .task-card .meta-tag {
+      flex:0 1 auto !important; max-width:100% !important;
+      padding:2px 5px !important; font-size:10px !important;
+      white-space:normal !important; overflow-wrap:anywhere !important;
+      overflow:visible !important; text-overflow:clip !important;
+    }
+    html body .task-card .complete-btn {
+      position:absolute !important; top:13px !important; right:11px !important;
+      width:32px !important; height:32px !important; min-width:32px !important; min-height:32px !important;
+      padding:0 !important; transform:none !important; border-radius:50% !important;
+    }
+    html body :is(.focus-task-main,.project-card,.list-row > div,.day-course-card > div,.day-task-card > div) { min-width:0 !important; }
+    html body :is(.focus-task-main strong,.project-card h3,.list-row strong,.day-course-card strong,.day-task-card strong) { overflow-wrap:anywhere !important; }
+    html body :is(.focus-task,.list-row) { height:auto !important; max-height:none !important; }
+
+    /* Navigation is one bar with a single focal action, not five raised tiles. */
+    html body .mobile-bottom-nav {
+      height:calc(62px + var(--safe-bottom)) !important;
+      padding:4px max(6px,var(--safe-right)) var(--safe-bottom) max(6px,var(--safe-left)) !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important; gap:4px !important;
+      align-items:center !important; border-radius:0 !important;
+    }
+    html body .mobile-bottom-nav button {
+      position:relative !important; min-width:0 !important; height:52px !important;
+      min-height:44px !important; padding:5px 2px !important; gap:3px !important;
+      border:0 !important; border-radius:10px !important;
+      transform:none !important;
+    }
+    html body .mobile-bottom-nav button .ui-icon { width:21px !important; height:21px !important; }
+    html body .mobile-bottom-nav button strong { font-size:10px !important; font-weight:500 !important; line-height:1.2 !important; }
+    html body .mobile-bottom-nav #mobileNavCreate {
+      width:44px !important; height:44px !important; min-height:44px !important;
+      margin:0 auto !important; align-self:center !important; border-radius:50% !important;
+    }
+    html body .mobile-bottom-nav #mobileNavCreate .ui-icon { width:23px !important; height:23px !important; }
+    html body .mobile-bottom-nav #mobileNavCreate strong { display:none !important; }
+    html body.admin-mode .mobile-bottom-nav { grid-template-columns:1fr !important; }
+    html body .mobile-matrix-tabs button { font-size:12px !important; border-radius:9px !important; }
+    html body .mobile-matrix-tabs button span { font-size:12px !important; font-weight:500 !important; }
+    html body .mobile-matrix-tabs button strong { font-size:11px !important; font-weight:550 !important; }
+    html body .mobile-matrix-tabs button.active {
+      background:var(--quadrant-color,var(--accent)) !important;
+      color:var(--action-ink) !important; border-color:transparent !important;
+    }
+
+    html body .sidebar { padding-left:18px !important; padding-right:18px !important; }
+    html body .sidebar .main-nav { gap:4px !important; }
+    html body .sidebar .nav-item {
+      min-height:48px !important; padding:11px 12px !important;
+      grid-template-columns:22px minmax(0,1fr) auto !important; gap:9px !important;
+      border-radius:11px !important; font-size:15px !important; font-weight:450 !important;
+    }
+    html body .sidebar .nav-count { font-size:11px !important; padding:2px 6px !important; }
+    html body .sidebar-actions {
+      display:grid !important; grid-template-columns:1fr 1fr !important;
+      gap:8px !important; margin-top:22px !important; padding:16px 0 0 !important;
+      border-top:1px solid var(--line) !important;
+    }
+    html body .sidebar-actions .sidebar-action {
+      min-width:0 !important; min-height:46px !important; gap:7px !important;
+      justify-content:flex-start !important; padding:10px !important;
+      border-radius:10px !important; font-size:12px !important; line-height:1.4 !important;
+      white-space:normal !important; text-align:left !important;
+    }
+    html body .sidebar-actions #cloudBtn { grid-column:1 / -1 !important; }
+    html body #cloudBtn .data-hub-label { display:flex !important; flex:1 !important; min-width:0 !important; flex-direction:column !important; gap:3px !important; align-items:flex-start !important; }
+    html body #cloudBtn #cloudLabel { max-width:100% !important; overflow:hidden !important; font-size:10px !important; white-space:nowrap !important; text-overflow:ellipsis !important; }
+    html body .sidebar-actions .app-filing-link {
+      grid-column:1 / -1 !important; display:block !important; width:100% !important;
+      min-height:0 !important; height:auto !important; padding:6px 2px !important;
+      border:0 !important; background:transparent !important; background-image:none !important;
+      box-shadow:none !important; text-align:left !important; font-size:10px !important;
+      line-height:1.5 !important; color:var(--muted) !important; white-space:normal !important;
+    }
+    html body #appearanceModal { padding:0 !important; }
+    html body #appearanceModal > form { padding:20px !important; }
+    html body #appearanceModal .modal-header { margin-bottom:20px !important; }
+    html body #appearanceTitle { font-family:inherit !important; font-size:21px !important; font-weight:550 !important; }
+    html body #appearanceModal .skin-options { margin-bottom:22px !important; }
+    html body #appearanceModal .skin-option { padding:10px !important; gap:6px !important; }
+    html body #appearanceModal .skin-option input { top:12px !important; right:12px !important; }
+    html body #appearanceModal .skin-preview { height:70px !important; padding:12px !important; }
+    html body #appearanceModal .preview-liquid i:first-child { background:#899bb6 !important; }
+    html body #appearanceModal .skin-option strong { font-size:13px !important; font-weight:550 !important; }
+    html body #appearanceModal .skin-option small { font-size:11px !important; line-height:1.5 !important; }
+    html body #appearanceModal .appearance-footer { margin-top:16px !important; }
+    html body #appearanceModal .appearance-footer button { min-height:44px !important; padding:10px 24px !important; }
+  }
+  @media (max-width:960px) and (orientation:landscape) and (pointer:coarse) {
+    html body .task-card { min-height:65px !important; padding:8px 43px 8px 10px !important; }
+    html body .task-card h4 { font-size:12px !important; margin-bottom:5px !important; }
+    html body .task-card .complete-btn { top:9px !important; right:7px !important; width:28px !important; height:28px !important; min-width:28px !important; min-height:28px !important; }
+    html body .mobile-bottom-nav {
+      height:100% !important; grid-template-columns:1fr !important;
+      grid-template-rows:repeat(5,52px) !important; align-content:center !important;
+      gap:5px !important; padding:var(--safe-top) 5px var(--safe-bottom) !important;
+    }
+    html body .mobile-bottom-nav button { height:48px !important; grid-template-columns:1fr !important; }
+  }
+  @media (forced-colors:active) {
+    html body .appearance-mode-option:has(:checked) { outline:2px solid Highlight !important; }
+  }
+}

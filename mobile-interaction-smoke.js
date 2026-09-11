@@ -11,7 +11,7 @@ async function main() {
     const name = new URL(req.url, "http://localhost").pathname;
     const file = path.join(root, name === "/" ? "index.html" : name);
     if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404).end(); return; }
-    res.setHeader("Content-Type", file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : "text/html");
+    res.setHeader("Content-Type", file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : file.endsWith(".svg") ? "image/svg+xml" : file.endsWith(".woff2") ? "font/woff2" : "text/html");
     fs.createReadStream(file).pipe(res);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

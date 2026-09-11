@@ -353,7 +353,7 @@ body.dark .live-clock { background:#686a69; }
   .admin-controls,.migration-card { align-items:flex-start; flex-direction:column; }.admin-stats { gap:8px; }.admin-stat { padding:13px; }.admin-stat strong { font-size:20px; }.admin-user { grid-template-columns:1fr; }.admin-user-actions { justify-content:flex-start; }
 }
 
-.cloud-button { display: flex; align-items: center; gap: 7px; }
+.cloud-button { display: flex; align-items: center; gap: 7px; }.cloud-button #cloudLabel { white-space:nowrap; }
 .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 14%, transparent); }
 .sync-dot.online { background: var(--q2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--q2) 16%, transparent); }
 .sync-dot.syncing { background: var(--q3); animation: sync-pulse 1.2s ease-in-out infinite; }

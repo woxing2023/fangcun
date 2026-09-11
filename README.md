@@ -95,6 +95,8 @@ npm run check
 
 ## 部署到 Ubuntu 高端口
 
+当前 `20260911-calendar-v3` 更新使用 [Hermes 发布及 Workbench 升级](docs/workbench-xuan.md)：本地打包与隐私扫描，Hermes 上传 Release 后从原阿里云轻量应用服务器 Workbench 校验升级。下面保留通用首次安装参考。
+
 当前部署方案不会占用或修改 80、443，也不会触碰 Hysteria。默认只监听服务器本机的 `127.0.0.1:18443`，由免费 Cloudflare Tunnel 提供公网 HTTPS。
 
 1. 把整个项目上传到服务器，例如放到 `/tmp/schedule_dimensions`。

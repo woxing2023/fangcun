@@ -22,7 +22,7 @@ fi
 install -d -m 0755 "$APP_DIR"
 install -d -m 0755 "$APP_DIR/deploy"
 install -d -o fangcun -g fangcun -m 0750 "$DATA_DIR"
-for file in index.html privacy.html styles.css v22-layout.css smart-parser.js docx-schedule-parser.js app.js manifest.webmanifest icon.svg service-worker.js appearance.css liquid.css liquid-select.js appearance.js liquid-renderer.js three.module.min.js three.core.min.js THREE-LICENSE.txt reset-password.js server.js outlook-sync.js google-sync.js package.json; do
+for file in index.html privacy.html styles.css v22-layout.css smart-parser.js docx-schedule-parser.js app.js manifest.webmanifest icon.svg service-worker.js appearance.css xuan.css xuan-fibers.svg xuan-fibers-mobile.png xuan-sans.woff2 xuan-serif.woff2 FONT-LICENSE.txt material-light.js touch-material.js mobile-ui.css mobile-material.css mobile-calendar.css calendar-surface.css appearance-controls.js liquid.css liquid-select.js appearance.js liquid-renderer.js three.module.min.js three.core.min.js THREE-LICENSE.txt reset-password.js server.js outlook-sync.js google-sync.js package.json; do
   install -m 0644 "$SOURCE_DIR/$file" "$APP_DIR/$file"
 done
 install -m 0755 "$SOURCE_DIR/deploy/verify.sh" "$APP_DIR/deploy/verify.sh"
