@@ -6,7 +6,7 @@
 
 - **Outlook / Microsoft 365 双向同步**：服务端为每个用户创建独立的“方寸”日历，支持新增、改期、改地点、改提醒和删除。
 - **Google 日历双向同步**：服务端为每个用户创建独立的“方寸”日历，首次全量对齐，之后使用 Google `syncToken` 增量同步。
-- **REDMI / Android 系统日历双向同步**：APK 通过 Android Calendar Provider 创建账号专属本地日历，小米日历可直接编辑。
+- **Android 系统日历双向同步**：APK 通过 Android Calendar Provider 创建账号专属本地日历，小米日历可直接编辑。
 - **ICS 私密订阅**：只读兼容方式，不参与反向修改，不要和上面三条通道重复启用同一份日历。
 
 ```text
@@ -79,7 +79,7 @@ https://calendar.example.invalid/api/integrations/google/callback
 
 6. 保存客户端 ID 和客户端密钥。不要把密钥放进网页、APK、聊天记录或代码仓库。
 
-方寸授权时请求 `openid email profile`、`calendar.app.created` 和 `calendar.calendarlist.readonly`，只管理由方寸创建的次级日历并读取日历列表，不申请读写用户全部日历；同时请求离线访问，以便阿里云服务器在用户不打开网页时继续同步。
+方寸授权时请求 `openid email profile`、`calendar.app.created` 和 `calendar.calendarlist.readonly`，只管理由方寸创建的次级日历并读取日历列表，不申请读写用户全部日历；同时请求离线访问，以便云服务器在用户不打开网页时继续同步。
 
 ### 4.2 服务器变量
 
@@ -127,7 +127,7 @@ APK 会用系统浏览器完成授权，并通过 `fangcun://outlook-connected` 
 
 断开连接只会删除方寸服务器上的加密令牌和映射，不会删除远端“方寸”日历。若准备换账号，建议先断开，再在 Microsoft/Google 账号的安全设置中撤销旧授权。
 
-## 6. REDMI / HyperOS 系统日历
+## 6. Android / HyperOS 系统日历
 
 1. 安装 `fangcun-v2.7.0-debug.apk`，或使用同一正式签名生成的 release APK。
 2. 登录方寸，打开“日历 → 同步与导入 → 小米 / Android 系统日历”。
@@ -157,7 +157,7 @@ APK 会用系统浏览器完成授权，并通过 `fangcun://outlook-connected` 
 
 ## 8. 提醒如何跨平台到达
 
-- **REDMI**：APK 使用 `AlarmManager` 发原生通知；小米“方寸”本地日历也可发系统日历通知。若收到双提醒，可关闭其中一种。
+- **Android**：APK 使用 `AlarmManager` 发原生通知；小米“方寸”本地日历也可发系统日历通知。若收到双提醒，可关闭其中一种。
 - **Windows / Outlook**：事件提醒由 Outlook/Windows 通知系统触发；确保 Windows 通知和 Outlook 日历提醒未被关闭。
 - **Google / Android / iOS**：Google“方寸”日历中的事件提醒由 Google Calendar 客户端和系统通知触发。
 - **方寸网页**：浏览器提醒仅作前台辅助，浏览器被冻结或关闭时不能作为唯一提醒来源。

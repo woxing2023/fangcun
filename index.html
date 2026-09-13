@@ -7,13 +7,13 @@
     <meta name="description" content="把课程、期限、优先级与长期目标收进一个行动中枢" />
     <title>方寸 · 今天先做什么</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="manifest" href="manifest.webmanifest?v=2.7.0" />
+    <link rel="manifest" href="manifest.webmanifest?v=2.8.0" />
     <link rel="stylesheet" href="calendar-surface.css?v=1" />
     <link rel="stylesheet" href="mobile-ui.css?v=2" />
     <link rel="stylesheet" href="mobile-material.css?v=2" />
     <link rel="stylesheet" href="mobile-calendar.css?v=1" />
-    <link rel="stylesheet" href="styles.css?v=2.7.0" />
-    <link rel="stylesheet" href="v22-layout.css?v=2.7.0" />
+    <link rel="stylesheet" href="styles.css?v=2.8.0" />
+    <link rel="stylesheet" href="v22-layout.css?v=2.8.0" />
     <link rel="stylesheet" href="appearance.css?v=6" />
     <link rel="stylesheet" href="xuan.css?v=3" />
     <link rel="stylesheet" href="liquid.css?v=5" />
@@ -303,7 +303,7 @@
         <div class="form-grid">
           <label class="field"><span>课程名称</span><input id="courseName" required maxlength="60" placeholder="例如：机器学习" /></label>
           <label class="field"><span>课程配色</span><select id="courseColor"><option value="auto">自动 · 同课同色、同类同色系</option><option value="#4F6BED">手动 · 曜石蓝</option><option value="#0FA77A">手动 · 翡翠绿</option><option value="#F59E0B">手动 · 明亮琥珀</option><option value="#EF5B5B">手动 · 珊瑚红</option><option value="#8B5CF6">手动 · 电光紫</option><option value="#0891B2">手动 · 湖水青</option><option value="#F97316">手动 · 活力橙</option><option value="#EC4899">手动 · 莓果粉</option></select></label>
-          <label class="field"><span>课程代码</span><input id="courseCode" maxlength="40" placeholder="例如：PHY1006_1188" /></label>
+          <label class="field"><span>课程代码</span><input id="courseCode" maxlength="40" placeholder="例如：GEN1001_1188" /></label>
           <label class="field"><span>校区</span><input id="courseCampus" maxlength="40" placeholder="例如：湖畔校区" /></label>
           <label class="field"><span>教师</span><input id="courseTeacher" maxlength="40" placeholder="教师姓名" /></label>
           <label class="field"><span>教室</span><input id="courseLocation" maxlength="60" placeholder="教学楼与教室" /></label>
@@ -384,7 +384,7 @@
 
     <dialog class="modal data-hub-modal" id="cloudModal">
       <div class="modal-header"><div><span class="eyebrow">所有设备与文件</span><h2>数据与同步</h2></div><button type="button" class="close-button" data-close-dialog="cloudModal" aria-label="关闭">×</button></div>
-      <div class="data-hub-tabs" role="tablist" aria-label="同步类型"><button type="button" role="tab" data-sync-tab="account" aria-selected="true">方寸账号</button><button type="button" role="tab" data-sync-tab="calendar" aria-selected="false">外部日历</button><button type="button" role="tab" data-sync-tab="files" aria-selected="false">文件与备份</button></div>
+      <div class="data-hub-tabs" role="tablist" aria-label="同步类型"><button type="button" role="tab" data-sync-tab="account" aria-selected="true">方寸账号</button><button type="button" role="tab" data-sync-tab="calendar" aria-selected="false">外部日历</button><button type="button" role="tab" data-sync-tab="files" aria-selected="false">文件与备份</button><button type="button" role="tab" data-sync-tab="agent" aria-selected="false">Agent 接入</button></div>
       <section data-sync-panel="account" role="tabpanel">
       <form method="dialog" id="cloudAuthForm">
         <p class="cloud-summary" id="cloudSummary">正在检查服务器状态…</p>
@@ -418,7 +418,7 @@
               <button type="button" class="danger-button" id="deleteAccountBtn">永久注销账号</button>
             </div>
           </details>
-          <p class="app-version-info" id="appVersionInfo">方寸 v2.7.0</p>
+          <p class="app-version-info" id="appVersionInfo">方寸 v2.8.0</p>
         </div>
         <div class="modal-footer"><span></span><button type="button" class="secondary-button" id="cloudRegisterBtn">注册账号</button><button type="button" class="secondary-button" data-close-dialog="cloudModal">关闭</button><button type="submit" class="primary-button" id="cloudAuthSubmit">登录并同步</button></div>
       </form>
@@ -457,6 +457,27 @@
         <div class="import-choice"><label><strong>Word 课表 DOCX</strong><span>读取 Word 表格中的星期、节次、课程、教室和周次；旧 DOC 请先另存为 DOCX。</span><input id="wordScheduleInput" type="file" accept="application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,application/msword,.doc" /></label><label><strong>拾光课程表 JSON</strong><span>先预览课程、重复与异常，确认后再写入。</span><input id="shiguangImportInput" type="file" accept="application/json,.json" /></label><label><strong>通用 ICS 日历</strong><span>先检查事件、冲突与重复，或导出当前课表。</span><input id="icsImportInput" type="file" accept="text/calendar,.ics" /></label></div>
         <section class="import-preview hidden" id="scheduleImportPreview" aria-live="polite"></section>
         <div class="modal-footer"><button type="button" class="text-button hidden" id="undoScheduleImportBtn">撤销上次导入</button><span></span><button type="button" class="secondary-button" id="exportScheduleJsonBtn">导出 JSON</button><button type="button" class="primary-button" id="exportIcsBtn">导出 ICS</button></div>
+      </section>
+      <section id="agentAccessPanel" data-sync-panel="agent" class="admin-main-column hidden" role="tabpanel" aria-label="Agent 接入">
+        <p class="field-hint">生成访问令牌后，Codex、Claude Code、Hermes 等编码代理可通过 REST API 安全读写你的日程。令牌只显示一次，可随时吊销；默认 90 天后过期。</p>
+        <p class="field-hint" id="agentAccessStatus" role="status" aria-live="polite">请先登录方寸账号。</p>
+        <section class="admin-card"><form id="agentTokenForm" autocomplete="off">
+          <h3>生成新令牌</h3>
+          <label class="field field-wide"><span>名称（必填，最多 60 字）</span><input id="agentTokenName" required maxlength="60" autocomplete="off" aria-describedby="agentTokenNameError" placeholder="例如：member-codex" /></label>
+          <p class="field-hint hidden" id="agentTokenNameError" role="alert"></p>
+          <div class="inline-actions"><button type="submit" class="primary-button" id="createAgentTokenBtn">生成新令牌</button></div>
+          <div id="agentTokenReveal" class="hidden">
+            <p class="field-hint">请现在复制并安全保存。关闭弹窗、切换标签或刷新后，完整令牌不再显示。</p>
+            <code id="agentTokenValue" tabindex="0" aria-label="本次生成的访问令牌"></code>
+            <button type="button" class="secondary-button" id="copyAgentTokenBtn">复制令牌</button>
+          </div>
+        </form></section>
+        <section class="admin-card" aria-labelledby="agentTokensHeading">
+          <div class="admin-section-heading"><h3 id="agentTokensHeading">访问令牌</h3><button type="button" class="text-button" id="refreshAgentAccessBtn">刷新</button></div>
+          <div id="agentTokenList" class="admin-users"><p class="field-hint">登录后查看令牌。</p></div>
+        </section>
+        <section class="admin-card" aria-labelledby="agentAuditHeading"><h3 id="agentAuditHeading">最近活动</h3><div id="agentAuditList" class="admin-users"><p class="field-hint">登录后查看最近 10 条活动。</p></div></section>
+        <p class="field-hint">Agent 读取和修改的是当前账号的云端数据；本机内容请先在“方寸账号”中同步。</p>
       </section>
     </dialog>
 
@@ -506,8 +527,8 @@
         <div class="appearance-footer"><button class="primary-button">完成</button></div>
       </form>
     </dialog>
-    <script src="smart-parser.js?v=2.7.0"></script>
-    <script src="docx-schedule-parser.js?v=2.7.0"></script>
-    <script src="app.js?v=2.7.0"></script>
+    <script src="smart-parser.js?v=2.8.0"></script>
+    <script src="docx-schedule-parser.js?v=2.8.0"></script>
+    <script src="app.js?v=2.8.0"></script>
   </body>
 </html>

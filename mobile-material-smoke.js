@@ -94,7 +94,7 @@ async function checkDialogsAndMenus(page, touch) {
         data.courses = Array.from({length:42}, (_, i) => ({ id:'qa-course-' + i,
           name:['计算机和程序设计基础ALab 2 - Python as a Calculator','大学物理实验','微积分与线性代数','英语写作'][i % 4],
           day:i % 7 + 1, startSection:Math.floor(i / 7) * 2 + 1, endSection:Math.min(13, Math.floor(i / 7) * 2 + 2),
-          weeks:Array.from({length:20}, (_, j) => j + 1), location:'E13-205', color:COURSE_PALETTE[i % COURSE_PALETTE.length], colorAuto:false }));
+          weeks:Array.from({length:20}, (_, j) => j + 1), location:'B12-205', color:COURSE_PALETTE[i % COURSE_PALETTE.length], colorAuto:false }));
         data.tasks = Array.from({length:180}, (_, i) => ({ id:'qa-task-' + i,
           title:'计算机和程序设计基础A新作业：Lab 2 - Python as a Calculator ' + i, notes:'', due:localISO(addDays(new Date(), i % 7)), dueTime:'23:59',
           startDate:'', important:true, urgent:i % 2 === 0, quadrant:i % 2 === 0 ? 'q1' : 'q2', completed:false, type:'task', repeat:'none', createdAt:Date.now() }));

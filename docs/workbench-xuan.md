@@ -18,7 +18,7 @@ sha256sum --check fangcun-SHA256SUMS-20260911-calendar3.txt
 
 ## 2. Hermes 在 Workbench 下载并升级
 
-连接原阿里云轻量应用服务器实例。将 `FANGCUN_REPO` 设为已授权 Release 所在仓库的 `owner/repo`；这里不预填账户或服务器信息。以下命令适用于可直接下载的 Release 附件；仓库需登录时，Hermes 应使用已有授权下载方式将相同两个文件放入暂存目录，随后执行相同的校验与升级步骤，不把访问令牌写入文档或命令历史。
+连接原云服务器轻量应用服务器实例。将 `FANGCUN_REPO` 设为已授权 Release 所在仓库的 `owner/repo`；这里不预填账户或服务器信息。以下命令适用于可直接下载的 Release 附件；仓库需登录时，Hermes 应使用已有授权下载方式将相同两个文件放入暂存目录，随后执行相同的校验与升级步骤，不把访问令牌写入文档或命令历史。
 
 ```bash
 (

@@ -7,7 +7,7 @@ const { DatabaseSync } = require("node:sqlite");
 const { OutlookIntegration } = require("./outlook-sync");
 const { GoogleIntegration } = require("./google-sync");
 
-const APP_VERSION = "2.7.0";
+const APP_VERSION = "2.8.0";
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const root = __dirname;
@@ -16,6 +16,8 @@ const databasePath = path.join(dataDirectory, "fangcun.sqlite");
 const trustProxy = process.env.TRUST_PROXY === "true";
 const sessionMaxAge = 30 * 24 * 60 * 60;
 const maxBodyBytes = 2 * 1024 * 1024;
+const agentMaxBodyBytes = 64 * 1024;
+const agentRequests = new Map();
 const publicFiles = new Set(["index.html", "privacy.html", "styles.css", "v22-layout.css", "smart-parser.js", "docx-schedule-parser.js", "app.js", "manifest.webmanifest", "icon.svg", "service-worker.js", "appearance.css", "xuan.css", "xuan-fibers.svg", "xuan-fibers-mobile.png", "xuan-sans.woff2", "xuan-serif.woff2", "material-light.js", "touch-material.js", "mobile-ui.css", "mobile-material.css", "mobile-calendar.css", "calendar-surface.css", "appearance-controls.js", "liquid.css", "liquid-select.js", "appearance.js", "liquid-renderer.js", "three.module.min.js", "three.core.min.js"]);
 const types = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".webmanifest": "application/manifest+json; charset=utf-8", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".png": "image/png" };
 const attempts = new Map();
@@ -68,6 +70,24 @@ database.exec(`
     last_access_at TEXT
   );
   CREATE INDEX IF NOT EXISTS calendar_tokens_owner ON calendar_tokens(user_id);
+  CREATE TABLE IF NOT EXISTS agent_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at INTEGER,
+    expires_at INTEGER,
+    last_used_at INTEGER,
+    UNIQUE(user_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS agent_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    action TEXT,
+    detail TEXT,
+    created_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS agent_audit_owner ON agent_audit(user_id, id DESC);
   DROP TABLE IF EXISTS voice_commands;
   DROP TABLE IF EXISTS voice_tokens;
 `);
@@ -101,6 +121,15 @@ const statements = {
   deleteCalendarToken: database.prepare("DELETE FROM calendar_tokens WHERE user_id = ?"),
   getCalendarOwner: database.prepare("SELECT u.id, u.display_name, u.status, s.document, s.revision, s.updated_at FROM calendar_tokens c JOIN users u ON u.id = c.user_id LEFT JOIN user_states s ON s.user_id = u.id WHERE c.token_hash = ? AND u.status = 'active'"),
   touchCalendarToken: database.prepare("UPDATE calendar_tokens SET last_access_at = ? WHERE token_hash = ?"),
+  addAgentToken: database.prepare("INSERT INTO agent_tokens (token_hash, user_id, name, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"),
+  listAgentTokens: database.prepare("SELECT name, created_at AS createdAt, expires_at AS expiresAt, last_used_at AS lastUsedAt FROM agent_tokens WHERE user_id = ? ORDER BY created_at DESC, name"),
+  getAgentTokenByName: database.prepare("SELECT token_hash FROM agent_tokens WHERE user_id = ? AND name = ?"),
+  deleteAgentToken: database.prepare("DELETE FROM agent_tokens WHERE user_id = ? AND name = ?"),
+  getAgentOwner: database.prepare("SELECT a.token_hash, a.user_id, a.expires_at, u.status FROM agent_tokens a JOIN users u ON u.id = a.user_id WHERE a.token_hash = ?"),
+  touchAgentToken: database.prepare("UPDATE agent_tokens SET last_used_at = ? WHERE token_hash = ?"),
+  addAgentAudit: database.prepare("INSERT INTO agent_audit (token_hash, user_id, action, detail, created_at) VALUES (?, ?, ?, ?, ?)"),
+  pruneAgentAudit: database.prepare("DELETE FROM agent_audit WHERE user_id IS ? AND id NOT IN (SELECT id FROM agent_audit WHERE user_id IS ? ORDER BY id DESC LIMIT 500)"),
+  listAgentAudit: database.prepare("SELECT action, detail, created_at AS createdAt FROM agent_audit WHERE user_id = ? ORDER BY id DESC LIMIT 10"),
   legacyState: database.prepare("SELECT document, revision, updated_at FROM state WHERE id = 1"),
   legacySnapshots: database.prepare("SELECT revision, document, created_at FROM snapshots ORDER BY id"),
 };
@@ -164,20 +193,29 @@ function json(response, status, payload, extraHeaders = {}) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(body), "Cache-Control": "no-store", ...extraHeaders });
   response.end(body);
 }
-function readJson(request) {
+function readJson(request, byteLimit = maxBodyBytes) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let oversized = false;
     request.on("data", (chunk) => {
       size += chunk.length;
-      if (size > maxBodyBytes) { reject(Object.assign(new Error("请求内容过大"), { status: 413 })); request.destroy(); return; }
+      if (oversized) return;
+      if (size > byteLimit) {
+        oversized = true;
+        chunks.length = 0;
+        reject(Object.assign(new Error("请求内容过大"), { status: 413 }));
+        return;
+      }
       chunks.push(chunk);
     });
     request.on("end", () => {
+      if (oversized) return;
       try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}); }
       catch { reject(Object.assign(new Error("JSON 格式不正确"), { status: 400 })); }
     });
     request.on("error", reject);
+    request.on("aborted", () => reject(Object.assign(new Error("请求已中断"), { status: 400 })));
   });
 }
 
@@ -440,10 +478,193 @@ function serveCalendarSubscription(request, response, url) {
   return true;
 }
 
+function agentError(status, message) { return Object.assign(new Error(message), { status }); }
+function agentObject(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw agentError(400, "请求内容必须是 JSON 对象");
+  return body;
+}
+function validAgentName(name) {
+  return typeof name === "string" && [...name.trim()].length >= 1 && [...name.trim()].length <= 60 && ![".", ".."].includes(name.trim()) && !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(name);
+}
+function validAgentDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+function agentOwner(request) {
+  const match = String(request.headers.authorization || "").match(/^Bearer ([A-Za-z0-9_-]{43})$/i);
+  return match ? statements.getAgentOwner.get(hashToken(match[1])) || null : null;
+}
+function activeAgent(owner) { return owner && owner.status === "active" && owner.expires_at > Date.now(); }
+function agentRateAllowed(tokenHash) {
+  const now = Date.now();
+  for (const [key, times] of agentRequests) if (!times.length || now - times[times.length - 1] >= 60000) agentRequests.delete(key);
+  const recent = (agentRequests.get(tokenHash) || []).filter((time) => now - time < 60000);
+  if (recent.length >= 60) return false;
+  recent.push(now);
+  agentRequests.set(tokenHash, recent);
+  return true;
+}
+function recordAgentAudit(owner, action, status) {
+  // Only fixed route labels and status codes: request bodies and bearer values never enter the audit.
+  const userId = owner && statements.getUserById.get(owner.user_id) ? owner.user_id : null;
+  statements.addAgentAudit.run(userId ? owner.token_hash : null, userId, action, JSON.stringify({ status }).slice(0, 200), Date.now());
+  statements.pruneAgentAudit.run(userId, userId);
+}
+function agentDocument(userId) {
+  const row = statements.getState.get(userId);
+  if (!row) return { row: null, document: { schemaVersion: 3, tasks: [], projects: [], courses: [], timeSlots: [], courseExceptions: [], semester: {}, settings: {} } };
+  const document = parseDocument(row.document);
+  if (!validDocument(document)) throw agentError(409, "日程数据需要先在方寸中修复并同步");
+  return { row, document };
+}
+function validateAgentTask(body, document, existing = null) {
+  agentObject(body);
+  const allowed = new Set(["title", "notes", "due", "dueTime", "important", "urgent", "courseId", existing ? "completed" : "quadrant"]);
+  if (Object.keys(body).some((key) => !allowed.has(key))) throw agentError(400, "包含不支持的任务字段");
+  if (existing && !Object.keys(body).length) throw agentError(400, "请提供至少一个要修改的字段");
+  const has = (key) => Object.hasOwn(body, key);
+  if ((!existing || has("title")) && (typeof body.title !== "string" || !body.title.trim() || [...body.title.trim()].length > 120)) throw agentError(400, "title 需要为 1 到 120 个字");
+  if (has("notes") && (typeof body.notes !== "string" || [...body.notes].length > 2000)) throw agentError(400, "notes 最多 2000 个字");
+  if (has("due") && body.due !== "" && !validAgentDate(body.due)) throw agentError(400, "due 需要为有效的 YYYY-MM-DD 日期，或空字符串");
+  if (has("dueTime") && (typeof body.dueTime !== "string" || (body.dueTime !== "" && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(body.dueTime)))) throw agentError(400, "dueTime 需要为 HH:mm，或空字符串");
+  for (const key of ["important", "urgent", "completed"]) if (has(key) && typeof body[key] !== "boolean") throw agentError(400, `${key} 必须为布尔值`);
+  if (has("quadrant") && !["q1", "q2", "q3", "q4"].includes(body.quadrant)) throw agentError(400, "quadrant 只能为 q1 到 q4，实际分类由 important/urgent 推导");
+  if (has("courseId") && (typeof body.courseId !== "string" || body.courseId.length > 120 || (body.courseId !== "" && !document.courses.some((course) => course.id === body.courseId)))) throw agentError(400, "courseId 必须是当前用户已有的课程，或空字符串");
+  const now = Date.now();
+  const task = existing ? { ...existing } : {
+    id: crypto.randomUUID(), title: "", notes: "", due: "", dueTime: "", courseId: "", projectId: "",
+    type: "task", repeat: "none", reminderMinutes: -1, important: false, urgent: false,
+    completed: false, today: false, source: "agent", createdAt: now,
+  };
+  for (const key of allowed) if (key !== "quadrant" && has(key)) task[key] = key === "title" ? body.title.trim() : body[key];
+  if (has("due") && body.due === "" && !has("dueTime")) task.dueTime = "";
+  if (task.dueTime && !task.due) throw agentError(400, "dueTime 需要同时有截止日期 due");
+  if (!existing || has("important") || has("urgent")) {
+    task.quadrant = task.important == null || task.urgent == null ? null : task.important ? (task.urgent ? "q1" : "q2") : (task.urgent ? "q3" : "q4");
+  }
+  if (has("completed")) task.completedAt = task.completed ? (existing?.completedAt || now) : null;
+  task.updatedAt = now;
+  return task;
+}
+function nextAgentOccurrence(task) {
+  if (!["daily", "weekly", "weekdays", "monthly"].includes(task.repeat) || task.nextOccurrenceId) return null;
+  // Match the app's calendar-date recurrence rules, including month-end clamping.
+  const base = task.due ? new Date(`${task.due}T12:00:00`) : new Date();
+  if (!Number.isFinite(base.getTime())) throw agentError(400, "重复任务的截止日期不正确");
+  let next = new Date(base);
+  if (task.repeat === "monthly") {
+    next = new Date(base.getFullYear(), base.getMonth() + 2, 0, 12);
+    next.setDate(Math.min(base.getDate(), next.getDate()));
+  } else {
+    next.setDate(next.getDate() + (task.repeat === "weekly" ? 7 : 1));
+    if (task.repeat === "weekdays") while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
+  }
+  const due = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+  const nextTask = { ...task, id: crypto.randomUUID(), due, today: false, completed: false, completedAt: null, createdAt: Date.now(), recurrenceSourceId: task.id, nextOccurrenceId: null };
+  task.nextOccurrenceId = nextTask.id;
+  return nextTask;
+}
+async function handleAgentManagement(request, response, url, user) {
+  if (!user || request.headers.authorization) return json(response, 401, { error: "令牌管理需要用户会话，请勿使用 Bearer 令牌" });
+  if (url.pathname === "/api/agent/audit") {
+    if (request.method !== "GET") return json(response, 405, { error: "此接口只支持 GET" }, { Allow: "GET" });
+    return json(response, 200, { audit: statements.listAgentAudit.all(user.id) });
+  }
+  if (url.pathname === "/api/agent/tokens") {
+    if (request.method === "GET") return json(response, 200, { tokens: statements.listAgentTokens.all(user.id) });
+    if (request.method === "POST") {
+      const body = agentObject(await readJson(request, agentMaxBodyBytes));
+      if (Object.keys(body).some((key) => !["name", "expiresInDays"].includes(key))) throw agentError(400, "包含不支持的令牌字段");
+      if (!validAgentName(body.name)) throw agentError(400, "名称需要为 1 到 60 个字，不能含控制字符");
+      const expiresInDays = Object.hasOwn(body, "expiresInDays") ? body.expiresInDays : 90;
+      if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) throw agentError(400, "expiresInDays 必须为 1 到 365 的整数");
+      // Recheck after reading the body so logout/account disable also takes effect in flight.
+      if (!requestUser(request)) return json(response, 401, { error: "会话已失效，请重新登录" });
+      const name = body.name.trim();
+      if (statements.getAgentTokenByName.get(user.id, name)) return json(response, 409, { error: "这个令牌名称已经存在，请使用其他名称" });
+      const token = crypto.randomBytes(32).toString("base64url");
+      const createdAt = Date.now();
+      const expiresAt = createdAt + expiresInDays * 86400000;
+      statements.addAgentToken.run(hashToken(token), user.id, name, createdAt, expiresAt);
+      return json(response, 201, { token, name, createdAt, expiresAt });
+    }
+    return json(response, 405, { error: "此接口支持 GET、POST" }, { Allow: "GET, POST" });
+  }
+  const match = url.pathname.match(/^\/api\/agent\/tokens\/([^/]+)$/);
+  if (match) {
+    if (request.method !== "DELETE") return json(response, 405, { error: "此接口只支持 DELETE" }, { Allow: "DELETE" });
+    let name;
+    try { name = decodeURIComponent(match[1]); } catch { throw agentError(400, "令牌名称编码不正确"); }
+    if (!validAgentName(name) || name !== name.trim()) throw agentError(400, "令牌名称不正确");
+    const token = statements.getAgentTokenByName.get(user.id, name);
+    if (!token) return json(response, 404, { error: "令牌不存在" });
+    statements.deleteAgentToken.run(user.id, name);
+    agentRequests.delete(token.token_hash);
+    return json(response, 200, { ok: true });
+  }
+  return json(response, 404, { error: "接口不存在" });
+}
+async function handleAgentBusiness(request, response, url) {
+  let owner = agentOwner(request);
+  const taskMatch = url.pathname.match(/^\/api\/agent\/tasks\/([^/]+)$/);
+  const action = request.method === "GET" && url.pathname === "/api/agent/schedule" ? "schedule.read"
+    : request.method === "POST" && url.pathname === "/api/agent/tasks" ? "tasks.create"
+      : request.method === "PATCH" && taskMatch ? "tasks.update" : "request.unsupported";
+  const send = (status, payload, headers = {}) => {
+    recordAgentAudit(owner, action, status);
+    return json(response, status, payload, headers);
+  };
+  try {
+    if (!activeAgent(owner)) return send(401, { error: "Agent 令牌无效、已过期或已吊销" });
+    if (!agentRateAllowed(owner.token_hash)) return send(429, { error: "每个令牌每分钟最多 60 次请求" }, { "Retry-After": "60" });
+    statements.touchAgentToken.run(Date.now(), owner.token_hash);
+    if (!originAllowed(request)) return send(403, { error: "请求来源不受信任" });
+    if (action === "schedule.read") {
+      const { row, document } = agentDocument(owner.user_id);
+      return send(200, { tasks: document.tasks, courses: document.courses, semester: document.semester || {}, timeSlots: document.timeSlots, courseExceptions: document.courseExceptions, calendarRules: document.calendarRules || [], revision: row?.revision || 0, updatedAt: row?.updatedAt || null });
+    }
+    if (action === "tasks.create" || action === "tasks.update") {
+      const body = await readJson(request, agentMaxBodyBytes);
+      const currentOwner = agentOwner(request);
+      if (!activeAgent(currentOwner)) return send(401, { error: "Agent 令牌无效、已过期或已吊销" });
+      owner = currentOwner;
+      if (externalSyncing.has(owner.user_id)) return send(409, { error: "外部日历正在同步，请完成后重试" });
+      const { document } = agentDocument(owner.user_id);
+      let existing = null;
+      if (taskMatch) {
+        let id;
+        try { id = decodeURIComponent(taskMatch[1]); } catch { throw agentError(400, "任务 ID 编码不正确"); }
+        if (!id || id.length > 120 || /[\u0000-\u001f\u007f]/.test(id)) throw agentError(400, "任务 ID 不正确");
+        existing = document.tasks.find((task) => task.id === id);
+        if (!existing) return send(404, { error: "任务不存在" });
+      }
+      const task = validateAgentTask(body, document, existing);
+      if (existing) document.tasks[document.tasks.indexOf(existing)] = task;
+      else document.tasks.unshift(task);
+      if (existing && !existing.completed && task.completed) {
+        const nextTask = nextAgentOccurrence(task);
+        if (nextTask) document.tasks.unshift(nextTask);
+      }
+      if (!validDocument(document)) throw agentError(400, "日程内容过大，请先整理已有数据");
+      const saved = persistExternalDocument(owner.user_id, document);
+      return send(existing ? 200 : 201, { task, ...saved });
+    }
+    if (url.pathname === "/api/agent/schedule" || url.pathname === "/api/agent/tasks" || taskMatch) return send(405, { error: "Agent v1 不支持此操作" }, { Allow: taskMatch ? "PATCH" : url.pathname.endsWith("schedule") ? "GET" : "POST" });
+    return send(404, { error: "接口不存在" });
+  } catch (error) {
+    // Do not log request data or raw exceptions from agent requests.
+    return send(error.status || 500, { error: error.status ? error.message : "服务器内部错误" });
+  }
+}
+
 async function handleApi(request, response, url) {
+  const agentManagement = url.pathname === "/api/agent/tokens" || url.pathname.startsWith("/api/agent/tokens/") || url.pathname === "/api/agent/audit";
+  if (url.pathname.startsWith("/api/agent/") && !agentManagement) return handleAgentBusiness(request, response, url);
   if (!originAllowed(request)) return json(response, 403, { error: "请求来源不受信任" });
   const configured = statements.userCount.get().count > 0;
   const user = requestUser(request);
+  if (agentManagement) return handleAgentManagement(request, response, url, user);
   if (request.method === "GET" && url.pathname === "/api/health") return json(response, 200, { ok: true, service: "fangcun", version: APP_VERSION, configured, time: new Date().toISOString() });
   if (request.method === "GET" && url.pathname === "/api/auth/session") return json(response, 200, { configured, authenticated: Boolean(user), user: publicUser(user), registrationOpen: registrationOpen(), version: APP_VERSION });
   if (request.method === "GET" && url.pathname === "/api/integrations/outlook/callback") {

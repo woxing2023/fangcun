@@ -156,8 +156,8 @@ vm.runInContext(`
   const semanticCourses = normalizeData({
     tasks: [], projects: [], semester: defaultSemester(), timeSlots: defaultTimeSlots(), courseExceptions: [], calendarRules: [], settings: {},
     courses: [
-      { id: "physics-tue", name: "大学物理", code: "PHY1006", day: 2, startSection: 1, endSection: 2, weeks: [1] },
-      { id: "physics-fri", name: "大学物理", code: "PHY1006", day: 5, startSection: 1, endSection: 2, weeks: [1] },
+      { id: "physics-tue", name: "大学物理", code: "GEN1001", day: 2, startSection: 1, endSection: 2, weeks: [1] },
+      { id: "physics-fri", name: "大学物理", code: "GEN1001", day: 5, startSection: 1, endSection: 2, weeks: [1] },
       { id: "chemistry", name: "化学原理I", code: "CHEM1001", day: 3, startSection: 3, endSection: 3, weeks: [1] },
       { id: "calculus", name: "微积分A（上）", code: "MATH1004", day: 1, startSection: 4, endSection: 5, weeks: [1] },
     ],
@@ -214,6 +214,69 @@ vm.runInContext(`
 `, context);
 if (!context.__generalWeek.timed.some((item) => item.id === "general-event" && item.kind === "event" && item.start === 840)) throw new Error("通用周历未按真实时间显示学期外日程");
 if (!context.__generalWeek.timed.some((item) => item.id === "general-deadline" && item.kind === "deadline" && item.start === 1080)) throw new Error("通用周历未同时显示任务期限");
+
+// Exercise real rendered timestamps with a small DOM adapter, then advance the clock.
+const calendarRoots = new Map();
+const calendarNodes = new Map();
+const originalQuery = document.querySelector;
+const originalQueryAll = document.querySelectorAll;
+const calendarRoot = (selector) => {
+  if (!calendarRoots.has(selector)) calendarRoots.set(selector, { ...element, innerHTML: "", dataset: {}, querySelectorAll: (query) => renderedCalendarNodes(selector, query) });
+  return calendarRoots.get(selector);
+};
+const renderedCalendarNodes = (selector, query) => {
+  const root = calendarRoot(selector);
+  if (calendarNodes.get(selector)?.html !== root.innerHTML) {
+    const nodes = [...root.innerHTML.matchAll(/<button\b([^>]*)>/g)].map(([, attributes]) => {
+      const dataset = Object.fromEntries([...attributes.matchAll(/data-([a-z-]+)="([^"]*)"/g)].map(([, name, value]) => [name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()), value]));
+      const classes = new Set((attributes.match(/class="([^"]*)"/)?.[1] || "").split(/\s+/));
+      return { dataset, classList: { contains: (name) => classes.has(name), toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } } };
+    });
+    calendarNodes.set(selector, { html: root.innerHTML, nodes });
+  }
+  return calendarNodes.get(selector).nodes.filter(({ dataset }) => query === "[data-calendar-end]" ? dataset.calendarEnd !== undefined : query === "[data-course-id][data-calendar-start]" ? dataset.courseId && dataset.calendarStart : query === "[data-calendar-past-date]" ? dataset.calendarPastDate : false);
+};
+document.querySelector = (selector) => ["#weekCalendar", "#scheduleBoard", "#courseAgenda"].includes(selector) ? calendarRoot(selector) : element;
+document.querySelectorAll = (query) => [...calendarRoots.keys()].flatMap((selector) => renderedCalendarNodes(selector, query));
+try {
+  vm.runInContext(`
+    data = normalizeData({
+      tasks: [], projects: [], courseExceptions: [], calendarRules: [], settings: {},
+      semester: { name: "课程状态测试", startDate: "2026-09-07", totalWeeks: 1, showWeekend: true },
+      timeSlots: [{ number: 1, startTime: "09:00", endTime: "10:00" }, { number: 2, startTime: "10:30", endTime: "11:30" }],
+      courses: [
+        { id: "dim-yesterday", name: "过去日期课程", day: 1, startSection: 1, endSection: 1, weeks: [1] },
+        { id: "dim-ended", name: "今日已结束课程", day: 2, startSection: 1, endSection: 1, weeks: [1] },
+        { id: "dim-current", name: "正在进行课程", day: 2, startSection: 2, endSection: 2, weeks: [1] },
+        { id: "dim-future", name: "未来课程", day: 3, startSection: 1, endSection: 1, weeks: [1] },
+      ],
+    });
+    displayedWeek = 1;
+  `, context);
+  for (const mode of ["week", "timetable"]) {
+    for (const layout of ["overview", "detail", "list"]) {
+      vm.runInContext(`scheduleMode = "${mode}"; localStorage.setItem(accountKey("fangcun-calendar-layout"), "${layout}"); renderSchedule(); refreshCalendarPast(new Date(2026, 8, 8, 11, 0));`, context);
+      const selector = layout === "list" ? "#courseAgenda" : mode === "week" ? "#weekCalendar" : "#scheduleBoard";
+      const courses = renderedCalendarNodes(selector, "[data-course-id][data-calendar-start]");
+      if (courses.length !== 4) throw new Error(`${mode}/${layout} 未保留四门课程及起止时间`);
+      for (const course of courses) {
+        const expected = ["dim-yesterday", "dim-ended"].includes(course.dataset.courseId);
+        if (course.classList.contains("dim") !== expected) throw new Error(`${mode}/${layout} 过去课程变暗状态错误：${course.dataset.courseId}`);
+        if (course.classList.contains("is-current") !== (course.dataset.courseId === "dim-current")) throw new Error(`${mode}/${layout} 进行中课程高亮错误`);
+      }
+      vm.runInContext(`refreshCalendarPast(new Date(2026, 8, 8, 12, 0));`, context);
+      if (!courses.find((course) => course.dataset.courseId === "dim-current").classList.contains("dim")) throw new Error(`${mode}/${layout} 时钟推进未更新已结束课程`);
+      vm.runInContext(`refreshCalendarPast(new Date(2026, 8, 8, 10, 0));`, context);
+      if (courses.find((course) => course.dataset.courseId === "dim-ended").classList.contains("dim")) throw new Error("结束时间严格小于当前时间时才应变暗");
+    }
+  }
+} finally {
+  document.querySelector = originalQuery;
+  document.querySelectorAll = originalQueryAll;
+}
+const calendarDimCss = fs.readFileSync("calendar-surface.css", "utf8");
+if (!/\.dim\s*\{[^}]*opacity:\.52\s*!important;[^}]*filter:saturate\(\.35\)/.test(calendarDimCss)) throw new Error("课程 dim 状态必须实际降低透明度与饱和度");
+console.log("课程变暗检查通过：周历/课表 × 全表/详情/清单，过去日期、09:00–10:00 已结束、进行中、未来和时钟推进均已验证。");
 
 vm.runInContext(`
   const flowToday = localISO();

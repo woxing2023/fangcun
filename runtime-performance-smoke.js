@@ -23,7 +23,7 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
     await page.waitForFunction(() => document.querySelector('#authGate').classList.contains('hidden') && !syncState.syncing && !syncState.reconciling);
     await page.evaluate(() => {
       document.documentElement.dataset.skin='liquid'; data.semester=defaultSemester();data.timeSlots=defaultTimeSlots();data.courses=[];data.tasks=[];data.projects=[];data.calendarRules=[];data.courseExceptions=[];
-      for(let i=0;i<42;i++) data.courses.push({id:'perf-course-'+i,name:'计算机程序设计及数据分析课程 '+i,day:i%7+1,startSection:1+Math.floor(i/7)*2,endSection:2+Math.floor(i/7)*2,weeks:[1,2,3,4],color:['#536db3','#3d8d83','#a56d47'][i%3],location:'E13-201',reminderMinutes:10});
+      for(let i=0;i<42;i++) data.courses.push({id:'perf-course-'+i,name:'计算机程序设计及数据分析课程 '+i,day:i%7+1,startSection:1+Math.floor(i/7)*2,endSection:2+Math.floor(i/7)*2,weeks:[1,2,3,4],color:['#536db3','#3d8d83','#a56d47'][i%3],location:'B12-201',reminderMinutes:10});
       const start=weekStartDate(1);
       for(let i=0;i<180;i++) data.tasks.push({id:'perf-task-'+i,title:'完成课程任务与报告 '+i,type:'task',quadrant:['q1','q2','q3','q4'][i%4],important:i%2===0,urgent:i%3===0,completed:false,due:localISO(addDays(start,i%21)),dueTime:'23:59',courseId:'perf-course-'+i%42,createdAt:Date.now()-i*1000,repeat:'none'});
       displayedWeek=1;scheduleMode='week';switchView('schedule');renderAll();

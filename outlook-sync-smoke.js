@@ -4,7 +4,7 @@ const { OutlookIntegration, localEvents, graphPayload, markerFromEvent, remoteTo
 
 const document = {
   tasks: [{ id: "ddl-1", title: "交实验报告", due: "2026-09-18", dueTime: "20:00", notes: "检查格式", location: "线上", reminderMinutes: 1440, completed: false, updatedAt: 10 }],
-  courses: [{ id: "physics", name: "大学物理", code: "PHY1006", teacher: "张老师", campus: "湖畔", location: "B12-201", day: 2, startSection: 1, endSection: 2, weeks: [1, 2], reminderMinutes: 15, createdAt: 10 }],
+  courses: [{ id: "physics", name: "大学物理", code: "GEN1001", teacher: "张老师", campus: "湖畔", location: "B12-201", day: 2, startSection: 1, endSection: 2, weeks: [1, 2], reminderMinutes: 15, createdAt: 10 }],
   timeSlots: [{ number: 1, startTime: "08:00", endTime: "08:45" }, { number: 2, startTime: "08:50", endTime: "09:35" }],
   courseExceptions: [], calendarRules: [], semester: { startDate: "2026-08-31", totalWeeks: 20 }, settings: {}, projects: [],
 };

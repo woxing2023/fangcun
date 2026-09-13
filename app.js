@@ -1,5 +1,5 @@
-const APP_VERSION = "2.7.0";
-const APP_BUILD = "20260911-calendar-v3-fix";
+const APP_VERSION = "2.8.0";
+const APP_BUILD = "20260913-agent-280";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";
@@ -649,7 +649,8 @@ function closeSidebar() {
 }
 
 function selectDataHubTab(tab) {
-  if (!["account", "calendar", "files"].includes(tab)) tab = "account";
+  if (!["account", "calendar", "files", "agent"].includes(tab)) tab = "account";
+  if (tab !== "agent") clearAgentAccess();
   $$("[data-sync-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.syncPanel !== tab));
   $$("[data-sync-tab]").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.syncTab === tab));
@@ -661,6 +662,7 @@ function selectDataHubTab(tab) {
     loadCalendarSubscription(); loadOutlookStatus(); loadGoogleStatus(); updateSystemCalendarStatus();
   }
   if (tab === "files") $("#undoScheduleImportBtn").classList.toggle("hidden", !data.settings.lastScheduleImportUndo);
+  if (tab === "agent") loadAgentAccess();
 }
 
 function openDataHub(tab = "account") {
@@ -671,6 +673,7 @@ function openDataHub(tab = "account") {
 
 function switchAccount(user) {
   const previousId = currentUser?.id;
+  if (previousId !== user?.id) clearAgentAccess();
   currentUser = user;
   syncState.user = user;
   if (!user) return;
@@ -864,6 +867,7 @@ function restorePreCloudData() {
 }
 
 async function logoutCloud() {
+  clearAgentAccess();
   clearTimeout(syncTimer);
   try { await apiRequest("/api/auth/logout", { method: "POST" }); } catch {}
   syncState.authenticated = false;
@@ -1638,6 +1642,7 @@ function refreshCalendarPast(now = new Date()) {
   $$("[data-calendar-end]").forEach((element) => {
     const starts = Number(element.dataset.calendarStart), ends = Number(element.dataset.calendarEnd);
     calendarSetClass(element, "past", ends < now.getTime());
+    calendarSetClass(element, "dim", Boolean(element.dataset.courseId) && ends < now.getTime());
     const current = starts <= now.getTime() && ends > now.getTime();
     calendarSetClass(element, "is-current", current);
     calendarSetClass(element, "current", current);
@@ -1668,9 +1673,13 @@ function renderCalendarList(start) {
     const date = addDays(start, day);
     return `<section class="calendar-list-day"><h3>${weekdays[day]} <span>${formatDate(localISO(date))}</span></h3>${items.length ? items.map((item) => {
       const attribute = item.kind === "course" ? `data-course-id="${item.id}"` : `data-task-id="${item.id}"`;
-      return `<button type="button" class="calendar-list-item ${item.kind}" ${attribute} style="--event-color:${item.color || "var(--accent)"};--event-semantic-color:${item.kind === "course" ? calendarSemanticColor(courseById(item.id)) : item.kind === "deadline" ? "var(--q1)" : "var(--accent)"}"><time>${item.start < 0 ? "全天" : minutesLabel(item.start)}${item.end ? `<small>${minutesLabel(Math.min(1440, item.end))}</small>` : ""}</time><div><strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.detail || (item.kind === "deadline" ? "截止事项" : ""))}</span></div><span class="calendar-list-arrow" aria-hidden="true">›</span></button>`;
+      const startAt = new Date(date), endAt = new Date(date);
+      startAt.setHours(0, item.start, 0, 0); endAt.setHours(0, item.end, 0, 0);
+      const timing = item.start >= 0 ? `data-calendar-start="${startAt.getTime()}" data-calendar-end="${endAt.getTime()}"` : "";
+      return `<button type="button" class="calendar-list-item ${item.kind}" ${attribute} ${timing} style="--event-color:${item.color || "var(--accent)"};--event-semantic-color:${item.kind === "course" ? calendarSemanticColor(courseById(item.id)) : item.kind === "deadline" ? "var(--q1)" : "var(--accent)"}"><time>${item.start < 0 ? "全天" : minutesLabel(item.start)}${item.end ? `<small>${minutesLabel(Math.min(1440, item.end))}</small>` : ""}</time><div><strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.detail || (item.kind === "deadline" ? "截止事项" : ""))}</span></div><span class="calendar-list-arrow" aria-hidden="true">›</span></button>`;
     }).join("") : '<p class="calendar-list-empty">没有安排</p>'}</section>`;
   }).join("");
+  refreshCalendarPast();
 }
 
 let calendarPresentationSignature = "";
@@ -3168,6 +3177,155 @@ async function revokeCalendarSubscription() {
   } catch (error) { showToast(error.message); }
 }
 
+const agentAccess = { epoch: 0, request: 0, generating: false };
+
+function clearAgentAccess() {
+  agentAccess.epoch += 1;
+  agentAccess.request += 1;
+  agentAccess.generating = false;
+  $("#agentTokenValue").textContent = "";
+  $("#agentTokenReveal").classList.add("hidden");
+  $("#agentTokenName").value = "";
+  $("#agentTokenName").removeAttribute("aria-invalid");
+  $("#agentTokenNameError").classList.add("hidden");
+  $("#agentTokenList").innerHTML = "";
+  $("#agentAuditList").innerHTML = "";
+  $("#agentAccessStatus").textContent = "";
+  $("#createAgentTokenBtn").disabled = false;
+  $("#createAgentTokenBtn").textContent = "生成新令牌";
+}
+
+function isCurrentAgentAccess(epoch, userId) {
+  return agentAccess.epoch === epoch && syncState.authenticated && currentUser?.id === userId
+    && $("#cloudModal").open && !$("#agentAccessPanel").classList.contains("hidden");
+}
+
+function agentAccessTime(timestamp) {
+  if (!timestamp) return "尚未使用";
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
+}
+
+function renderAgentAccess(tokens, audit) {
+  $("#agentTokenList").innerHTML = tokens.length ? tokens.map((token) => `<div class="admin-user"><div class="admin-user-main"><strong>${escapeHTML(token.name)}</strong><span>创建 ${escapeHTML(agentAccessTime(token.createdAt))}</span><span>过期 ${escapeHTML(agentAccessTime(token.expiresAt))}${token.expiresAt <= Date.now() ? " · 已过期" : ""}</span><span>最近使用 ${escapeHTML(agentAccessTime(token.lastUsedAt))}</span></div><button type="button" class="text-button" data-revoke-agent-token="${escapeHTML(token.name)}" aria-label="吊销 ${escapeHTML(token.name)}">吊销</button></div>`).join("") : '<p class="field-hint">尚未生成令牌。</p>';
+  $("#agentAuditList").innerHTML = audit.length ? audit.slice(0, 10).map((entry) => `<div class="admin-user"><div class="admin-user-main"><strong>${escapeHTML(entry.action)}</strong><span>${escapeHTML(agentAccessTime(entry.createdAt))}</span></div></div>`).join("") : '<p class="field-hint">暂无 Agent 活动。</p>';
+}
+
+async function loadAgentAccess() {
+  const status = $("#agentAccessStatus");
+  const button = $("#createAgentTokenBtn");
+  if (!syncState.authenticated) {
+    clearAgentAccess();
+    button.disabled = true;
+    status.textContent = "请先在“方寸账号”中登录，再管理 Agent 访问令牌。";
+    $("#agentTokenList").innerHTML = '<p class="field-hint">登录后查看令牌。</p>';
+    $("#agentAuditList").innerHTML = '<p class="field-hint">登录后查看最近 10 条活动。</p>';
+    return;
+  }
+  const epoch = agentAccess.epoch;
+  const userId = currentUser?.id;
+  const request = ++agentAccess.request;
+  button.disabled = agentAccess.generating;
+  status.textContent = "正在加载令牌与最近活动…";
+  try {
+    const [tokenResult, auditResult] = await Promise.all([
+      apiRequest("/api/agent/tokens"), apiRequest("/api/agent/audit"),
+    ]);
+    if (!isCurrentAgentAccess(epoch, userId) || agentAccess.request !== request) return;
+    renderAgentAccess(tokenResult.tokens, auditResult.audit);
+    status.textContent = "每个令牌每分钟最多 60 次请求；最近活动保留在当前账号内。";
+  } catch (error) {
+    if (!isCurrentAgentAccess(epoch, userId) || agentAccess.request !== request) return;
+    status.textContent = error.status === 401 ? "登录已失效，请先在“方寸账号”中重新登录。" : `加载失败：${error.message}。请点击刷新重试。`;
+  }
+}
+
+async function createAgentToken(event) {
+  event.preventDefault();
+  if (agentAccess.generating) return;
+  if (!syncState.authenticated) return loadAgentAccess();
+  const input = $("#agentTokenName");
+  const name = input.value.trim();
+  if (!name || [...name].length > 60 || name === "." || name === ".." || /[\u0000-\u001f\u007f\ud800-\udfff]/u.test(name)) {
+    $("#agentTokenNameError").textContent = "请输入 1–60 字的名称，不要包含换行或控制字符，也不能仅为“.”或“..”。";
+    $("#agentTokenNameError").classList.remove("hidden");
+    input.setAttribute("aria-invalid", "true");
+    input.focus();
+    return;
+  }
+  const epoch = agentAccess.epoch;
+  const userId = currentUser?.id;
+  const button = $("#createAgentTokenBtn");
+  agentAccess.generating = true;
+  agentAccess.request += 1;
+  button.disabled = true;
+  button.textContent = "正在生成…";
+  $("#agentAccessStatus").textContent = "正在生成令牌，请稍候。";
+  $("#agentTokenValue").textContent = "";
+  $("#agentTokenReveal").classList.add("hidden");
+  try {
+    const result = await apiRequest("/api/agent/tokens", { method: "POST", body: JSON.stringify({ name }) });
+    if (!isCurrentAgentAccess(epoch, userId)) return;
+    $("#agentTokenValue").textContent = result.token;
+    $("#agentTokenReveal").classList.remove("hidden");
+    input.value = "";
+    await loadAgentAccess();
+    if (isCurrentAgentAccess(epoch, userId)) $("#agentTokenValue").focus();
+  } catch (error) {
+    if (!isCurrentAgentAccess(epoch, userId)) return;
+    $("#agentAccessStatus").textContent = `生成失败：${error.message}`;
+    if (error.status === 400 || error.status === 409) {
+      $("#agentTokenNameError").textContent = error.status === 409 ? "这个名称已被使用，请换一个名称后重试。" : error.message;
+      $("#agentTokenNameError").classList.remove("hidden");
+      input.setAttribute("aria-invalid", "true");
+      input.focus();
+    }
+  } finally {
+    if (agentAccess.epoch === epoch) {
+      agentAccess.generating = false;
+      button.disabled = false;
+      button.textContent = "生成新令牌";
+    }
+  }
+}
+
+async function copyAgentToken() {
+  const value = $("#agentTokenValue").textContent;
+  if (!value || !$("#cloudModal").open) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast("令牌已复制，请安全保存");
+  } catch {
+    const range = document.createRange();
+    range.selectNodeContents($("#agentTokenValue"));
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    showToast("无法自动复制，已选中令牌，请手动复制");
+  }
+}
+
+async function revokeAgentToken(button) {
+  const name = button.dataset.revokeAgentToken;
+  if (button.disabled || !confirm(`吊销“${name}”后，使用该令牌的 Agent 将立即失去访问权限。是否继续？`)) return;
+  const epoch = agentAccess.epoch;
+  const userId = currentUser?.id;
+  button.disabled = true;
+  button.textContent = "正在吊销…";
+  try {
+    await apiRequest(`/api/agent/tokens/${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (!isCurrentAgentAccess(epoch, userId)) return;
+    $("#agentTokenValue").textContent = "";
+    $("#agentTokenReveal").classList.add("hidden");
+    await loadAgentAccess();
+    if (isCurrentAgentAccess(epoch, userId)) showToast("令牌已吊销");
+  } catch (error) {
+    if (isCurrentAgentAccess(epoch, userId)) $("#agentAccessStatus").textContent = `吊销失败：${error.message}。请重试。`;
+  } finally {
+    button.disabled = false;
+    button.textContent = "吊销";
+  }
+}
+
 const integrationUI = {
   outlook: { name: "Outlook", suffix: "Outlook", status: null, busy: false },
   google: { name: "Google", suffix: "Google", status: null, busy: false },
@@ -4017,6 +4175,19 @@ function initStaticEvents() {
   $("#syncNowBtn").addEventListener("click", syncNow);
   document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSidebar(); });
   $("#cloudAuthForm").addEventListener("submit", submitCloudAuth);
+  $("#agentTokenForm").addEventListener("submit", createAgentToken);
+  $("#copyAgentTokenBtn").addEventListener("click", copyAgentToken);
+  $("#refreshAgentAccessBtn").addEventListener("click", () => { clearAgentAccess(); loadAgentAccess(); });
+  $("#agentTokenList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-revoke-agent-token]");
+    if (button) revokeAgentToken(button);
+  });
+  $("#agentTokenName").addEventListener("input", () => {
+    $("#agentTokenName").removeAttribute("aria-invalid");
+    $("#agentTokenNameError").classList.add("hidden");
+  });
+  $("#cloudModal").addEventListener("close", clearAgentAccess);
+  window.addEventListener?.("pagehide", clearAgentAccess);
   $("#cloudRegisterBtn").addEventListener("click", () => { $("#cloudModal").close(); showAuthGate(); setAuthMode("register"); });
   $("#pullCloudBtn").addEventListener("click", pullCloudData);
   $("#pushCloudBtn").addEventListener("click", pushCloudData);

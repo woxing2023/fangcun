@@ -36,7 +36,7 @@ async function main() {
       const titles = ["计算机和程序设计基础 Lab 2 - Python as a Calculator", "线性代数与空间解析几何", "大学物理实验与数据分析"];
       const colors = ["#536db3", "#3d8d83", "#a56d47", "#8d65a1"];
       for (let day = 1; day <= 7; day++) for (let slot = 0; slot < 3; slot++) {
-        data.courses.push({ id: `calendar-${day}-${slot}`, name: titles[slot], day, startSection: [1, 6, 11][slot], endSection: [2, 7, 13][slot], weeks: [1], color: colors[(day + slot) % colors.length], location: `E13-${200 + day}`, teacher: "任课老师", reminderMinutes: 10 });
+        data.courses.push({ id: `calendar-${day}-${slot}`, name: titles[slot], day, startSection: [1, 6, 11][slot], endSection: [2, 7, 13][slot], weeks: [1], color: colors[(day + slot) % colors.length], location: `B12-${200 + day}`, teacher: "任课老师", reminderMinutes: 10 });
       }
       const start = weekStartDate(1);
       data.tasks.push({ id: "calendar-early", title: "清晨完整显示测试", startDate: localISO(start), startTime: "06:30", endTime: "07:00", type: "event", completed: false });

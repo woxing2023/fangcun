@@ -82,11 +82,11 @@ sudo systemctl restart fangcun
 sudo bash /opt/fangcun/deploy/verify.sh
 ```
 
-完整的 Entra 回调地址、权限与 REDMI 日历设置见 `docs/calendar-sync-guide.md`。
+完整的 Entra 回调地址、权限与 Android 日历设置见 `docs/calendar-sync-guide.md`。
 
 ## 5.5 忘记普通账号或 owner 密码时
 
-服务器不会保存明文密码，因此旧密码无法查看或导出。升级到 2.7.0 后，在阿里云 Workbench 终端运行：
+服务器不会保存明文密码，因此旧密码无法查看或导出。升级到 2.7.0 后，在云服务器 Workbench 终端运行：
 
 ```bash
 sudo bash /opt/fangcun/deploy/reset-password.sh '<用户名>'
@@ -111,7 +111,7 @@ release/fangcun-v2.7.0-debug.apk
 
 测试包适合自己安装验收，不应用于公开商店或长期分发。正式签名配置见 `android/README.md`，生产密钥必须离线备份并永久保留。
 
-## 7. 安装到 REDMI
+## 7. 安装到 Android
 
 开启手机“开发者选项 → USB 调试”，连接电脑后：
 

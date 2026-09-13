@@ -70,7 +70,7 @@ html[data-skin="liquid"] body.dark { --xuan-base:rgba(44,53,64,.95); --xuan-veil
     .import-preview,.import-preview-card,.calendar-preset,.calendar-rule,.slot-settings,
     dialog,.auth-card,.privacy-page main
   ):not(:where(button,a[href],input,textarea,select,summary,[role="button"],[role="tab"],
-    [contenteditable="true"],[data-task-id],[data-course-id],[data-project-id],[data-calendar-date],[data-material="none"])):not(:where(#scheduleView,#scheduleView *)) {
+    [contenteditable="true"],[data-task-id],[data-course-id],[data-project-id],[data-calendar-date],[data-material="none"])):not(:where(#scheduleView,#scheduleView *)):not(:where(html[data-skin="liquid"][data-material-performance="dynamic"] :is(dialog,.sidebar))) {
     background-color:var(--xuan-base) !important;
     background-image:var(--xuan-image) !important;
     background-size:var(--xuan-size) !important;
@@ -197,7 +197,7 @@ html:not([data-skin="liquid"]) body.dark {
   body:not([data-active-view="schedule"]):not(.admin-mode) .app-shell {
     grid-template-columns:278px minmax(0,1fr); gap:20px; padding:38px 28px;
   }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar {
+  body:not(.admin-mode) .sidebar {
     top:38px; height:calc(100dvh - 76px); padding:28px 20px 20px;
     border:1px solid var(--xuan-edge); border-radius:22px;
   }
@@ -205,15 +205,15 @@ html:not([data-skin="liquid"]) body.dark {
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar {
     height:98px; padding:18px; border:1px solid var(--xuan-edge); border-radius:22px;
   }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .brand { padding:6px 5px 32px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .brand span { font-size:12px; letter-spacing:.02em; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .brand-mark { width:40px; height:40px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .main-nav { gap:8px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .nav-item { min-height:50px; border:1px solid var(--glass-rim); border-radius:17px; gap:8px; font-size:17px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-note { padding:18px; margin: auto 0 14px; border-radius:18px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-note p { font-family:inherit; font-size:13px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-actions { padding:0; gap:10px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar-action { min-height:47px; font-size:13px; border-radius:15px; padding:10px 14px; }
+  body:not(.admin-mode) .brand { padding:6px 5px 32px; }
+  body:not(.admin-mode) .brand span { font-size:12px; letter-spacing:.02em; }
+  body:not(.admin-mode) .brand-mark { width:40px; height:40px; }
+  body:not(.admin-mode) .main-nav { gap:8px; }
+  body:not(.admin-mode) .nav-item { min-height:50px; border:1px solid var(--glass-rim); border-radius:17px; gap:8px; font-size:17px; }
+  body:not(.admin-mode) .sidebar-note { padding:18px; margin: auto 0 14px; border-radius:18px; }
+  body:not(.admin-mode) .sidebar-note p { font-family:inherit; font-size:13px; }
+  body:not(.admin-mode) .sidebar-actions { padding:0; gap:10px; }
+  body:not(.admin-mode) .sidebar-action { min-height:47px; font-size:13px; border-radius:15px; padding:10px 14px; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar .date-line { font-size:12px; letter-spacing:.02em; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar :is(.mobile-menu,.icon-button) { width:50px; height:50px; flex-basis:50px; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar .primary-button { min-height:50px; border-radius:18px; }
@@ -252,7 +252,7 @@ html body .preview-classic i:not(:where(#scheduleView,#scheduleView *)) { backgr
 html body .preview-classic i:first-child:not(:where(#scheduleView,#scheduleView *)) { background:var(--action-fill); }
 @media (min-width:961px) and (max-width:1199px) and (pointer:fine) {
   body:not([data-active-view="schedule"]):not(.admin-mode) .app-shell { grid-template-columns:236px minmax(0,1fr); padding:20px; gap:16px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .sidebar { top:20px; height:calc(100dvh - 40px); padding:22px 14px; }
+  body:not(.admin-mode) .sidebar { top:20px; height:calc(100dvh - 40px); padding:22px 14px; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .quick-add { left:280px; right:28px; bottom:20px; }
   body .today-workspace { padding:22px 10px; }
   body :is(.today-next,.today-section) { padding:18px; }

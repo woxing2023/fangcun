@@ -82,6 +82,7 @@ body.admin-mode .sidebar-actions:has(#appearanceSettingsBtn) { display:grid !imp
 body.admin-mode .sidebar-actions > :not(#appearanceSettingsBtn) { display:none; }
 /* A temporary, non-interactive lens lives inside the active surface (including top-layer dialogs). */
 .liquid-lens { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; border-radius:inherit; }
+.liquid-lens * { pointer-events:none; }
 .liquid-caustic { position:absolute; inset:0; background:radial-gradient(100px 65px at var(--water-x,50%) var(--water-y,20%),rgba(255,255,255,.24),transparent 80%); }
 .liquid-wave,.liquid-trail { position:absolute; width:20px; height:20px; border:1px solid rgba(235,248,255,.65); border-radius:50%; box-shadow:0 0 10px rgba(215,235,243,.22),inset 0 0 6px rgba(255,255,255,.18); transform:translate(-50%,-50%); }
 .liquid-wave { backdrop-filter:blur(1px); }
@@ -192,3 +193,33 @@ html body.privacy-page { display:block; height:auto; min-height:100dvh; overflow
 html body.privacy-page main:not(:where(#scheduleView,#scheduleView *)) { background:var(--card); box-shadow:var(--paper-shadow); }
 html body.privacy-page :is(h1,h2) { font-family:Georgia,"STSong",serif; font-weight:500; }
 @media (max-width:600px) { html body.privacy-page { padding:0; } }
+
+/* Desktop dialogs share the panel's optical plane. Touch material is unchanged.
+   Earlier material layers outrank legacy per-control important declarations. */
+@layer xuan-material {
+  html[data-material-performance="dynamic"] body dialog :where(*, *::before, *::after) {
+    -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+    transition:none !important;
+  }
+  html[data-material-performance="dynamic"] body dialog::backdrop {
+    -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  }
+  @media (min-width:961px) and (pointer:fine) {
+    /* The form supplies the single material surface, wherever it is mounted. */
+    html body .quick-add :is(input,.quick-input) {
+      background:transparent !important; border:0 !important; box-shadow:none !important;
+      -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+    }
+    html body .quick-add:focus-within { outline:2px solid var(--accent); outline-offset:3px; }
+    html:not([data-skin="liquid"]) body .sidebar .nav-item.active {
+      --action-fill:#3f62a8; --action-ink:#fff;
+    }
+    html:not([data-skin="liquid"]) body .sidebar .nav-item.active .nav-count {
+      background:rgba(255,255,255,.16) !important; color:#fff !important;
+    }
+  }
+}
+#agentTokenValue { display:block; padding:10px; overflow-wrap:anywhere; white-space:pre-wrap; font-family:ui-monospace,monospace; }
+@media (max-width:420px) {
+  #cloudModal .data-hub-tabs button { padding-inline:4px; font-size:12px; white-space:nowrap; }
+}

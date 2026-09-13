@@ -29,7 +29,6 @@
     let frame = 0;
     let latest = null;
     let lastTrail = 0;
-    let cleanupTimer = 0;
     let renderer = null, rendererLoading = null, rendererFailed = false;
     let rendererFactory = null;
     // Extension point for native DOM, custom elements, or framework-mounted controls.
@@ -83,13 +82,12 @@
       releaseRenderer(); sync();
     });
     function clear() {
-      cancelAnimationFrame(frame); frame = 0; clearTimeout(cleanupTimer);
+      cancelAnimationFrame(frame); frame = 0;
       renderer?.unmount();
       if (!active) return;
       active.animations.forEach(animation => animation.cancel());
       active.lens.remove();
-      active.target.style.position = active.position;
-      active.target.style.borderRadius = active.radius;
+      if (active.positionChanged) active.target.style.position = active.position;
       active = null;
     }
     function surface(target) {
@@ -104,15 +102,20 @@
       lens.className = "liquid-lens"; lens.setAttribute("aria-hidden", "true");
       const caustic = document.createElement("span"); caustic.className = "liquid-caustic"; lens.append(caustic);
       const computed = getComputedStyle(control);
+      const dialog = control.closest("dialog");
+      const dialogRect = dialog?.getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
-      active = { target:control, lens, rect, position:control.style.position, radius:control.style.borderRadius, animations:new Set() };
-      if (control.matches('input,textarea,select')) {
-        // Native/replaced controls cannot contain children. A fixed decorative
-        // proxy matches the control itself, never its label or helper text.
-        lens.style.cssText = `position:fixed;inset:auto;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;border-radius:${computed.borderRadius};z-index:250;`;
-        (control.closest('dialog') || document.body).append(lens);
+      active = { target:control, lens, rect, position:control.style.position, positionChanged:false, animations:new Set() };
+      if (dialog) {
+        // A backdrop-filter makes the dialog a fixed-position containing block.
+        // Use its padding-box coordinates; never move/resize the real control.
+        lens.style.cssText = `position:absolute;inset:auto;pointer-events:none;left:${rect.left - dialogRect.left - dialog.clientLeft + dialog.scrollLeft}px;top:${rect.top - dialogRect.top - dialog.clientTop + dialog.scrollTop}px;width:${rect.width}px;height:${rect.height}px;border-radius:${computed.borderRadius};z-index:250;`;
+        dialog.append(lens);
+      } else if (control.matches('input,textarea,select')) {
+        lens.style.cssText = `position:fixed;inset:auto;pointer-events:none;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;border-radius:${computed.borderRadius};z-index:250;`;
+        document.body.append(lens);
       } else {
-        if (computed.position === "static") control.style.position = "relative";
+        if (computed.position === "static") { control.style.position = "relative"; active.positionChanged = true; }
         control.append(lens);
       }
       ensureRenderer(active);
@@ -138,7 +141,6 @@
       frame = requestAnimationFrame(() => {
         frame = 0;
         const state = surface(latest.target); if (!state) { clear(); return; }
-        clearTimeout(cleanupTimer);
         const x = latest.clientX - state.rect.left, y = latest.clientY - state.rect.top;
         state.lens.style.setProperty("--water-x", `${x}px`); state.lens.style.setProperty("--water-y", `${y}px`);
         renderer?.move(x/state.rect.width,y/state.rect.height);
@@ -146,20 +148,23 @@
         // and segmented ends in the functional DOM.
         state.lens.style.borderRadius = getComputedStyle(state.target).borderRadius;
         if (performance.now() - lastTrail > 65) { particle(state, x, y, true); lastTrail = performance.now(); }
-        cleanupTimer = setTimeout(clear, 1000);
       });
     }, { passive:true });
     document.addEventListener("pointerdown", event => {
       const state = surface(event.target); if (!state) return;
       particle(state, event.clientX - state.rect.left, event.clientY - state.rect.top, false);
-      clearTimeout(cleanupTimer); cleanupTimer = setTimeout(clear, 1100);
     }, { passive:true });
     document.addEventListener("keydown", event => {
       if (event.key !== "Enter" && event.key !== " ") return;
       const state = surface(event.target); if (!state) return;
       particle(state, state.rect.width / 2, state.rect.height / 2, false);
-      clearTimeout(cleanupTimer); cleanupTimer = setTimeout(clear, 1100);
     });
+    // Keep a lens for the lifetime of its target, including idle hover. Cleanup
+    // follows real boundaries rather than a timer that mutates focused controls.
+    document.addEventListener("pointerout", event => { if (!event.relatedTarget) clear(); }, { passive:true });
+    document.addEventListener("focusout", event => { if (active?.target === event.target && event.relatedTarget !== event.target) clear(); });
+    document.addEventListener("close", event => { if (event.target.contains(active?.lens)) clear(); }, true);
+    window.addEventListener("blur", clear);
     document.addEventListener("scroll", clear, { capture:true, passive:true });
     document.addEventListener("visibilitychange", releaseRenderer);
     function refreshPerformance() { updatePerformance(); releaseRenderer(); }

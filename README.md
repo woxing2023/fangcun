@@ -95,7 +95,7 @@ npm run check
 
 ## 部署到 Ubuntu 高端口
 
-当前 `20260911-calendar-v3` 更新使用 [Hermes 发布及 Workbench 升级](docs/workbench-xuan.md)：本地打包与隐私扫描，Hermes 上传 Release 后从原阿里云轻量应用服务器 Workbench 校验升级。下面保留通用首次安装参考。
+当前 `20260911-calendar-v3` 更新使用 [Hermes 发布及 Workbench 升级](docs/workbench-xuan.md)：本地打包与隐私扫描，Hermes 上传 Release 后从原云服务器轻量应用服务器 Workbench 校验升级。下面保留通用首次安装参考。
 
 当前部署方案不会占用或修改 80、443，也不会触碰 Hysteria。默认只监听服务器本机的 `127.0.0.1:18443`，由免费 Cloudflare Tunnel 提供公网 HTTPS。
 
@@ -123,7 +123,7 @@ sudo systemctl status fangcun --no-pager
 sudo journalctl -u fangcun -n 100 --no-pager
 ```
 
-无需在阿里云防火墙或安全组中放行 18443。Tunnel 从服务器主动向外连接，UDP 443、TCP 80 和 TCP 443 保持原样。
+无需在云服务器防火墙或安全组中放行 18443。Tunnel 从服务器主动向外连接，UDP 443、TCP 80 和 TCP 443 保持原样。
 
 > 若只想临时通过公网高端口验收，可在 `/etc/fangcun.env` 中设置 `HOST=0.0.0.0`，并放行 TCP 18443；但公网 HTTP 不会加密密码和个人数据，也无法可靠安装 PWA，因此不建议长期使用。
 
@@ -149,6 +149,6 @@ sudo bash deploy/backup.sh
 
 浏览器通知适合页面或已安装 PWA 正在运行的场景。`android/` 已提供原生 Android 壳和 `AlarmManager` 提醒桥：它会接收网页端未来 90 天的课程与日程，在应用关闭或手机重启后继续注册系统提醒。Android 13 及以上仍需要用户允许通知；Android 12 及以上需要用户在系统“闹钟和提醒”页面允许精确提醒，未授权时会降级为非精确提醒。构建说明见 `android/README.md`。
 
-若希望与 Outlook、Google、Windows 和 REDMI 系统日历互相修改，在方寸中打开“日历 → 同步与导入”：连接 Outlook、Google，并在 APK 中开启“小米 / Android 系统日历”。ICS 私密订阅仍作为只读兼容模式。应用注册、阿里云服务器变量、手机授权、冲突规则和故障排查见 `docs/calendar-sync-guide.md`。
+若希望与 Outlook、Google、Windows 和 Android 系统日历互相修改，在方寸中打开“日历 → 同步与导入”：连接 Outlook、Google，并在 APK 中开启“小米 / Android 系统日历”。ICS 私密订阅仍作为只读兼容模式。应用注册、云服务器变量、手机授权、冲突规则和故障排查见 `docs/calendar-sync-guide.md`。
 
-完整的本地打包、Windows 一键上传升级、手动 SCP 命令、服务器验收、APK 构建、REDMI 安装和回滚流程见 `docs/deployment-guide.md`。
+完整的本地打包、Windows 一键上传升级、手动 SCP 命令、服务器验收、APK 构建、Android 安装和回滚流程见 `docs/deployment-guide.md`。
