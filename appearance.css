@@ -241,7 +241,8 @@ html body.privacy-page :is(h1,h2) { font-family:Georgia,"STSong",serif; font-wei
       background:transparent !important; border:0 !important; box-shadow:none !important;
       -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
     }
-    html body .quick-add:focus-within { outline:2px solid var(--accent); outline-offset:3px; }
+    /* 2026-09-18 Robin 反馈「按之后会亮起边框很奇怪」：移除 focus 时的 outline 亮边，
+       输入焦点状态由光标本身表达。 */
     html:not([data-skin="liquid"]) body .sidebar .nav-item.active {
       --action-fill:#3f62a8; --action-ink:#fff;
     }

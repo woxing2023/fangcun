@@ -1298,7 +1298,8 @@ function deadlineState(task, now = new Date()) {
   const days = Math.round((targetDay - dayStart) / 86400000);
   if (minutes < 0) {
     const overdue = Math.abs(minutes);
-    const label = overdue < 60 ? `⚠ 已逾期 ${overdue} 分钟` : overdue < 1440 ? `⚠ 已逾期 ${Math.ceil(overdue / 60)} 小时` : `⚠ 已逾期 ${Math.ceil(overdue / 1440)} 天`;
+    // 2026-09-18 Robin 反馈侧边栏「有制造焦虑的成分」：逾期表述去 ⚠/去「逾期」字眼，中性化
+    const label = overdue < 60 ? `超过时间 ${overdue} 分钟` : overdue < 1440 ? `超过时间 ${Math.ceil(overdue / 60)} 小时` : `超过时间 ${Math.ceil(overdue / 1440)} 天`;
     return { kind: "overdue", label, minutes };
   }
   if (days === 0 && task.dueTime) {
@@ -1308,7 +1309,7 @@ function deadlineState(task, now = new Date()) {
   if (days === 0) return { kind: "today", label: "今天", minutes };
   if (days === 1) return { kind: "soon", label: "明天", minutes };
   if (days > 1) return { kind: days <= 3 ? "soon" : "future", label: `${days} 天后`, minutes };
-  return { kind: "overdue", label: `⚠ 已逾期 ${Math.abs(days)} 天`, minutes };
+  return { kind: "overdue", label: `超过时间 ${Math.abs(days)} 天`, minutes };
 }
 
 function deadlineLabel(task, now = new Date()) {
@@ -1347,7 +1348,28 @@ function renderTaskCard(task) {
 
 function renderQuadrants() {
   Object.keys(quadrantInfo).forEach((quadrant) => {
-    const tasks = data.tasks.filter((task) => effectiveQuadrant(task) === quadrant && !task.completed);
+    // 2026-09-18 Robin 反馈「四象限的项目没法排顺序」：按用户拖拽顺序（manualOrder）
+    // > 紧急度（逾期>今天>将来）> 创建时间 排序，非默认插入序。
+    const rankOf = (task) => {
+      const state = deadlineState(task);
+      if (state.kind === "overdue") return 0;
+      if (state.kind === "urgent") return 1;
+      if (state.kind === "today") return 2;
+      if (state.kind === "soon") return 3;
+      return 4;
+    };
+    const tasks = data.tasks
+      .filter((task) => effectiveQuadrant(task) === quadrant && !task.completed)
+      .sort((a, b) => {
+        const oa = Number.isFinite(a.manualOrder) ? a.manualOrder : null;
+        const ob = Number.isFinite(b.manualOrder) ? b.manualOrder : null;
+        if (oa !== null && ob !== null && oa !== ob) return oa - ob;
+        if (oa !== null) return -1;
+        if (ob !== null) return 1;
+        const ra = rankOf(a), rb = rankOf(b);
+        if (ra !== rb) return ra - rb;
+        return (a.createdAt || 0) - (b.createdAt || 0);
+      });
     $(`#${quadrant}List`).innerHTML = tasks.length
       ? tasks.map(renderTaskCard).join("")
       : '<div class="empty-state">这里暂时很清爽</div>';
@@ -2154,8 +2176,8 @@ function dailyTipModel() {
     const [hour, minute] = slot.startTime.split(":").map(Number);
     return hour * 60 + minute >= minutesNow;
   });
-  if (overdue.length) return { tone: "danger", badge: `${overdue.length} 项逾期`, title: `先收口：${overdue[0].title}`, text: "完成、改期或删去它，让旧节点不再占据注意力。", action: "处理逾期事项 →", view: "today" };
-  if (dueToday.length) return { tone: "warning", badge: `${dueToday.length} 个 DDL`, title: dueToday[0].title, text: `${dueToday[0].dueTime ? `${dueToday[0].dueTime} 前完成。` : "今天截止。"}先留出完整时间块，再处理零碎消息。`, action: "查看今日节点 →", view: "today" };
+  if (overdue.length) return { tone: "calm", badge: `${overdue.length} 项可收尾`, title: overdue[0].title, text: "有时间的话可以先处理，或改期到更合适的时候。", action: "查看详情 →", view: "today" };
+  if (dueToday.length) return { tone: "calm", badge: `${dueToday.length} 个今日节点`, title: dueToday[0].title, text: `${dueToday[0].dueTime ? `${dueToday[0].dueTime} 前完成。` : "今天截止。"}按自己的节奏安排就好。`, action: "查看今日节点 →", view: "today" };
   if (urgentImportant) return { tone: "danger", badge: "重要且紧急", title: urgentImportant.title, text: "这是今天最值得优先清空的一件事。", action: "开始处理 →", view: "today" };
   if (upcoming) return { tone: "course", badge: `${slotByNumber(upcoming.startSection)?.startTime || "稍后"} 上课`, title: upcoming.name, text: `${coursePlace(upcoming) || "地点待确认"} · 提前整理资料和出发时间。`, action: "打开今日课表 →", view: "schedule" };
   if (important) return { tone: "focus", badge: "今日推进", title: important.title, text: "没有临近节点时，最适合为长期重要的事情推进一步。", action: "查看重要事项 →", view: "today" };
@@ -4618,6 +4640,24 @@ $$(`[data-close-dialog]`).forEach((button) => button.addEventListener("click", (
       if (!task) return;
       const decision = decisionForQuadrant(quadrant.dataset.quadrant);
       Object.assign(task, decision, { quadrant: quadrant.dataset.quadrant });
+      // 2026-09-18 Robin 反馈「四象限的项目没法排顺序」：drop 落点决定 manualOrder，
+      // 落到某张卡上半=插到它前面，下半=插到它后面；列表空白处=移到最后。
+      const list = quadrant.querySelector(`#${quadrant.dataset.quadrant}List`);
+      const cards = list ? [...list.querySelectorAll(".task-card:not(.dragging)")] : [];
+      if (cards.length) {
+        const target = event.target.closest(".task-card");
+        if (target && target !== card && cards.includes(target)) {
+          const targetTask = data.tasks.find((item) => item.id === target.dataset.taskId);
+          const rect = target.getBoundingClientRect();
+          const after = event.clientY > rect.top + rect.height / 2;
+          const base = Number.isFinite(targetTask?.manualOrder) ? targetTask.manualOrder : cards.indexOf(target);
+          task.manualOrder = after ? base + 0.5 : base - 0.5;
+        } else {
+          const last = cards[cards.length - 1];
+          const lastTask = data.tasks.find((item) => item.id === last.dataset.taskId);
+          task.manualOrder = (Number.isFinite(lastTask?.manualOrder) ? lastTask.manualOrder : cards.length - 1) + 1;
+        }
+      }
       saveData();
       showToast(`已移动到“${quadrantInfo[effectiveQuadrant(task)].name}”`);
     });

@@ -43,11 +43,9 @@
     active.node.style.setProperty('--light-x',`${(x*100).toFixed(2)}%`);
     active.node.style.setProperty('--light-y',`${(y*100).toFixed(2)}%`);
     if (press) {
+      // 2026-09-18 Robin 反馈「按钮会弹起来」：移除 press 弹跳动画（scale .96→1.01→1），
+      // 保留静默高光层——按下不再有弹跳形变。
       active.ripple?.cancel();
-      // Only the light deforms. The control's text and hit area stay fixed.
-      active.ripple=active.node.animate([
-        {opacity:.35,scale:'.96 .90'}, {opacity:1,scale:'1.01 1.02',offset:.36}, {opacity:.8,scale:'1'}
-      ],{duration:120,easing:'cubic-bezier(.23,1,.32,1)'});
     }
     clearTimeout(timer); timer=setTimeout(clear,press ? 950 : 1400);
   }

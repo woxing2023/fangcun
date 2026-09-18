@@ -166,7 +166,8 @@ vm.runInContext(`
   data = visualData;
   globalThis.__visualResult = { color: data.courses[0].color, tip: dailyTipModel() };
 `, context);
-if (context.__visualResult.color !== "#4F6BED" || context.__visualResult.tip.tone !== "danger" || !context.__visualResult.tip.title.includes("补交实验报告")) {
+// 2026-09-18 Robin 反馈侧边栏制造焦虑：逾期提示 tone danger→calm，断言同步新行为
+if (context.__visualResult.color !== "#4F6BED" || context.__visualResult.tip.tone !== "calm" || !context.__visualResult.tip.title.includes("补交实验报告")) {
   throw new Error("旧课程配色升级或每日焦点优先级不正确");
 }
 
@@ -314,7 +315,8 @@ vm.runInContext(`
 if (context.__todayFlow.selectedFocus.length !== 3 || context.__todayFlow.selectedFocus[0].id !== "late-focus" || !context.__todayFlow.selectedFocus.some((task) => task.id === "project-focus")) {
   throw new Error("Today 没有正确收敛到逾期、今日 DDL 与项目下一行动");
 }
-if (!context.__todayFlow.deadlineCopy.includes("逾期")) throw new Error("统一 Deadline 文案未明确显示逾期");
+// 2026-09-18 焦虑话术中性化：Deadline 文案「逾期」→「超过时间」，断言同步
+if (!context.__todayFlow.deadlineCopy.includes("超过时间")) throw new Error("统一 Deadline 文案未按中性表述显示");
 
 vm.runInContext(`
   data.timeSlots = defaultTimeSlots();

@@ -24,13 +24,15 @@ html body :is(.focus-task-main strong,.today-section-title h3,.sidebar-note > st
 html body :is(.eyebrow,.primary-button,.nav-item,.sidebar-action) { font-weight:450; }
 
 html body {
-  --xuan-base:rgba(241,237,231,.94);
+  /* 2026-09-18 Robin 反馈「背景颜色有问题」（米色偏黄）：宣纸基调从米黄调中性偏冷，
+     双主题同步（light 241,237,231 → 235,238,240；dark 不变基调只微调）。 */
+  --xuan-base:rgba(235,238,240,.94);
   --xuan-light:rgba(255,255,255,.30);
-  --xuan-shade:rgba(168,161,151,.08);
+  --xuan-shade:rgba(160,168,176,.08);
   --xuan-edge:rgba(255,255,255,.66);
   --xuan-rim:rgba(255,255,255,.78);
-  --xuan-shadow:inset 0 1px 1px var(--xuan-rim),inset 1px 0 1px rgba(255,255,255,.50),inset 0 -2px 3px rgba(117,111,103,.13),0 2px 2px rgba(255,255,255,.20),0 10px 16px -8px rgba(45,48,50,.18),0 26px 38px -19px rgba(45,48,50,.26);
-  --xuan-grain:url("xuan-fibers-mobile.png?v=1");
+  --xuan-shadow:inset 0 1px 1px var(--xuan-rim),inset 1px 0 1px rgba(255,255,255,.50),inset 0 -2px 3px rgba(110,118,126,.13),0 2px 2px rgba(255,255,255,.20),0 10px 16px -8px rgba(45,48,50,.18),0 26px 38px -19px rgba(45,48,50,.26);
+  --xuan-grain:url("xuan-fibers-mobile.png?v=2");
   --xuan-image:var(--xuan-grain),linear-gradient(128deg,var(--xuan-light),transparent 48%,var(--xuan-shade));
   --xuan-size:360px 360px,100% 100%;
   --xuan-blend:multiply,normal;
@@ -38,20 +40,20 @@ html body {
   --xuan-muted:#55606a;
 }
 html body.dark {
-  --xuan-base:rgba(48,51,55,.96);
-  --xuan-light:rgba(231,224,210,.055);
+  --xuan-base:rgba(44,48,53,.96);
+  --xuan-light:rgba(226,232,238,.055);
   --xuan-shade:rgba(8,13,20,.16);
   --xuan-edge:rgba(217,224,232,.16);
-  --xuan-rim:rgba(243,237,224,.13);
+  --xuan-rim:rgba(240,244,248,.13);
   --xuan-shadow:inset 0 1px 1px var(--xuan-rim),inset 0 -2px 3px rgba(0,0,0,.20),0 12px 18px -8px rgba(0,0,0,.24),0 26px 38px -19px rgba(0,0,0,.34);
-  --xuan-veil:rgba(48,51,55,.84);
+  --xuan-veil:rgba(44,48,53,.84);
   --xuan-image:linear-gradient(var(--xuan-veil),var(--xuan-veil)),var(--xuan-grain);
   --xuan-size:100% 100%,360px 360px;
   --xuan-blend:normal,soft-light;
   --xuan-ink:#e7e9eb;
   --xuan-muted:#b4bbc3;
 }
-html[data-skin="liquid"] body { --xuan-base:rgba(240,239,235,.92); }
+html[data-skin="liquid"] body { --xuan-base:rgba(236,238,241,.92); }
 html[data-skin="liquid"] body.dark { --xuan-base:rgba(44,53,64,.95); --xuan-veil:rgba(44,53,64,.84); }
 
 @layer xuan-material {
@@ -88,8 +90,8 @@ html[data-skin="liquid"] body.dark { --xuan-base:rgba(44,53,64,.95); --xuan-veil
   html body :is(.modal-header,.modal-footer,.mobile-create-sheet header):not(:where(#scheduleView,#scheduleView *)) { background:transparent !important; }
   /* Opaque paper fallbacks use the same fiber tile. */
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
-    html body { --xuan-base:#eeeae4 !important; }
-    html body.dark { --xuan-base:#30353c !important; }
+    html body { --xuan-base:#ebeef0 !important; }
+    html body.dark { --xuan-base:#2c3035 !important; }
   }
   @media (max-width:960px), (pointer:coarse) {
     html body { --xuan-shadow:inset 0 1px 0 var(--xuan-rim),0 3px 9px rgba(45,48,50,.055) !important; }
@@ -222,7 +224,7 @@ html:not([data-skin="liquid"]) body.dark {
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar .date-line { font-size:12px; letter-spacing:.02em; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar :is(.mobile-menu,.icon-button) { width:50px; height:50px; flex-basis:50px; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .topbar .primary-button { min-height:50px; border-radius:18px; }
-  body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock { border:1px solid var(--glass-rim); border-radius:17px; min-height:44px; }
+  body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock { border:1px solid var(--glass-rim); border-radius:999px; min-height:44px; padding:7px 14px; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock strong { font-size:18px; }
   body:not([data-active-view="schedule"]):not(.admin-mode) .live-clock span { font-size:11px; }
   body .today-workspace { width:100%; padding:30px 30px 20px; gap:14px; }
