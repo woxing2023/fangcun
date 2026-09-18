@@ -45,8 +45,8 @@ async function checkAgentApi(origin, ownerHeaders, otherHeaders, dataDirectory) 
     assert.equal(created.name, name);
     return created;
   };
-  for (const route of ["/schedule", "/tasks", "/tasks/missing"]) {
-    const method = route === "/schedule" ? "GET" : route === "/tasks" ? "POST" : "PATCH";
+  for (const route of ["/schedule", "/occurrences?from=2026-09-07&to=2026-09-07", "/tasks", "/tasks/missing"]) {
+    const method = route.startsWith("/schedule") || route.startsWith("/occurrences") ? "GET" : route === "/tasks" ? "POST" : "PATCH";
     assert.equal((await api(route, {}, method)).status, 401, "业务接口必须要求 Agent 令牌");
     assert.equal((await api(route, ownerHeaders, method)).status, 401, "会话 Cookie 不能代替 Agent 令牌");
     assert.equal((await api(route, tokenHeaders("a".repeat(43)), method)).status, 401, "伪造令牌必须失败");
@@ -71,8 +71,26 @@ async function checkAgentApi(origin, ownerHeaders, otherHeaders, dataDirectory) 
   assert.equal(JSON.stringify(listing).includes(created.token), false, "列表不能再次返回明文令牌");
   assert.equal((await api("/tokens", otherHeaders).then((response) => response.json())).tokens.length, 0, "令牌列表必须按用户隔离");
   assert.equal((await api(`/tokens/${encodeURIComponent(created.name)}`, otherHeaders, "DELETE")).status, 404, "其他用户不能吊销令牌");
+  const capabilities = await api("/capabilities", headers);
+  assert.equal(capabilities.status, 200);
+  const capabilityBody = await capabilities.json();
+  assert.equal(capabilityBody.apiVersion, "2.10.0");
+  assert.ok(capabilityBody.capabilities.some((item) => item.name === "schedule.read"));
+  assert.ok(capabilityBody.capabilities.some((item) => item.name === "occurrences.read" && item.method === "GET"));
+  assert.ok(capabilityBody.capabilities.some((item) => item.name === "tasks.create"));
+  assert.ok(capabilityBody.capabilities.some((item) => item.name === "tasks.update"));
+  assert.equal(capabilityBody.safety.deletes, "not_available");
 
-  const seed = { schemaVersion: 3, tasks: [], projects: [{ id: "project-retained", name: "保留项目" }], courses: [{ id: "agent-course", name: "测试课程", day: 1, startSection: 1, endSection: 2, weeks: [1, 2] }], timeSlots: [{ number: 1, startTime: "09:00", endTime: "10:00" }], courseExceptions: [], semester: { startDate: "2026-09-07", totalWeeks: 20 }, settings: { privateMarker: "never-exposed" } };
+  const seed = { schemaVersion: 3, tasks: [], projects: [{ id: "project-retained", name: "保留项目" }], courses: [
+    { id: "agent-course", name: "测试课程", day: 1, startSection: 1, endSection: 2, weeks: [1, 2] },
+    { id: "hotfix-physics", name: "大学物理A（上）", code: "PHY1006", teacher: "周晓晴", campus: "云谷校区", location: "E13-105", day: 5, startSection: 1, endSection: 2, weeks: [2], reminderMinutes: 15 },
+    { id: "hotfix-sport", name: "体育-形体", campus: "云谷校区", location: "J1-102", day: 5, startSection: 3, endSection: 4, weeks: [2], reminderMinutes: 15 },
+    { id: "hotfix-linear", name: "线性代数习题课", campus: "云谷校区", location: "E13-209", day: 5, startSection: 5, endSection: 6, weeks: [2], reminderMinutes: 15 },
+  ], timeSlots: [
+    { number: 1, startTime: "08:00", endTime: "08:45" }, { number: 2, startTime: "08:50", endTime: "09:35" },
+    { number: 3, startTime: "16:10", endTime: "16:55" }, { number: 4, startTime: "17:00", endTime: "17:45" },
+    { number: 5, startTime: "18:30", endTime: "19:15" }, { number: 6, startTime: "19:20", endTime: "20:05" },
+  ], courseExceptions: [{ id: "hotfix-same-day", courseId: "hotfix-physics", type: "reschedule", date: "2026-09-20", startSection: 1, endSection: 2 }], calendarRules: [{ id: "hotfix-teaching", date: "2026-09-20", type: "teaching", useDay: 5 }], semester: { startDate: "2026-09-07", totalWeeks: 20 }, settings: { privateMarker: "never-exposed" } };
   const saved = await fetch(`${origin}/api/data`, { method: "PUT", headers: { ...ownerHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ data: seed, baseRevision: 0 }) });
   assert.equal(saved.status, 200);
   const schedule = await api("/schedule", headers);
@@ -83,6 +101,38 @@ async function checkAgentApi(origin, ownerHeaders, otherHeaders, dataDirectory) 
   assert.deepEqual(summary.timeSlots, seed.timeSlots);
   assert.equal(JSON.stringify(summary).includes("never-exposed"), false, "摘要不暴露账户设置");
   assert.equal(summary.revision, 1);
+  const occurrence = await api("/occurrences?from=2026-09-07&to=2026-09-07", headers);
+  assert.equal(occurrence.status, 200);
+  assert.equal(occurrence.headers.get("cache-control"), "private, no-store");
+  const occurrenceBody = await occurrence.json();
+  assert.deepEqual(Object.keys(occurrenceBody).sort(), ["apiVersion", "timeZone", "from", "to", "revision", "updatedAt", "occurrences"].sort());
+  assert.equal(occurrenceBody.apiVersion, "2.10.0");
+  assert.equal(occurrenceBody.occurrences.length, 1);
+  assert.deepEqual(Object.keys(occurrenceBody.occurrences[0]).sort(), ["id", "courseId", "name", "code", "teacher", "campus", "location", "notes", "date", "keyDate", "day", "startSection", "endSection", "startTime", "endTime", "occurrenceChanged", "changeType", "isTeachingDay", "teachingUseDay", "reminderMinutes", "quality"].sort());
+  assert.equal(Object.hasOwn(occurrenceBody.occurrences[0], "record"), false);
+  for (const [from, to] of [["2026-09-07", "2026-09-07"], ["2026-09-07", "2026-12-07"]]) {
+    assert.equal((await api(`/occurrences?from=${from}&to=${to}`, headers)).status, 200, `${from}..${to} 应为合法闭区间`);
+  }
+  for (const query of ["", "from=2026-02-29&to=2026-02-29", "from=2026-09-08&to=2026-09-07", "from=2026-09-07&to=2026-12-08"]) {
+    assert.equal((await api(`/occurrences?${query}`, headers)).status, 400, `非法课程实例范围必须拒绝：${query}`);
+  }
+  const hotfixOccurrences = await api("/occurrences?from=2026-09-18&to=2026-09-20", headers).then((response) => response.json());
+  assert.equal(hotfixOccurrences.occurrences.length, 6, "热修合成fixture应在普通日和补课日各返回三门课");
+  for (const date of ["2026-09-18", "2026-09-20"]) {
+    const dayItems = hotfixOccurrences.occurrences.filter((item) => item.date === date);
+    assert.deepEqual(dayItems.map((item) => [item.name, item.startTime, item.location]), [
+      ["大学物理A（上）", "08:00", "E13-105"], ["体育-形体", "16:10", "J1-102"], ["线性代数习题课", "18:30", "E13-209"],
+    ]);
+    assert.ok(dayItems.every((item) => item.isTeachingDay === (date === "2026-09-20")));
+  }
+  const sameDay = hotfixOccurrences.occurrences.find((item) => item.date === "2026-09-20" && item.courseId === "hotfix-physics");
+  assert.equal(sameDay.changeType, "reschedule", "补课日同落点记录应保留 reschedule 来源");
+  assert.equal(sameDay.startSection, 1);
+  assert.equal(sameDay.endSection, 2);
+  const occurrenceAudit = await api("/audit", ownerHeaders).then((response) => response.json());
+  assert.ok(occurrenceAudit.audit.some((item) => item.action === "occurrences.read"), "occurrences.read 必须进入固定 action 审计");
+  assert.equal((await api("/occurrences?from=2026-09-07&to=2026-09-07", headers, "POST", {})).status, 405);
+  assert.equal((await api("/occurrences?from=2026-09-07&to=2026-09-07", headers, "POST", {})).headers.get("allow"), "GET");
   const taskResponse = await api("/tasks", headers, "POST", { title: "  Agent 测试任务  ", notes: "不应进入审计的备注", due: "2026-09-14", dueTime: "15:30", important: true, urgent: false, quadrant: "q1", courseId: "agent-course" });
   assert.equal(taskResponse.status, 201);
   const first = await taskResponse.json();
@@ -130,6 +180,10 @@ async function checkAgentApi(origin, ownerHeaders, otherHeaders, dataDirectory) 
   const otherToken = await createToken("agent smoke / 主要令牌", otherHeaders, 365);
   assert.equal(otherToken.expiresAt - otherToken.createdAt, 365 * 86400000);
   const otherTokenHeaders = tokenHeaders(otherToken.token);
+  const otherOccurrences = await api("/occurrences?from=2026-09-07&to=2026-09-07", otherTokenHeaders).then((response) => response.json());
+  assert.deepEqual(otherOccurrences.occurrences, [], "另一用户不得读取 owner 的课程实例");
+  const ownerOccurrencesAfterIsolation = await api("/occurrences?from=2026-09-07&to=2026-09-07", headers).then((response) => response.json());
+  assert.equal(ownerOccurrencesAfterIsolation.occurrences.some((item) => item.courseId === "other-course"), false, "课程实例不得跨用户泄露");
   assert.equal((await api(route, otherTokenHeaders, "PATCH", { title: "不能编辑" })).status, 404, "他人任务 ID 必须返回 404");
   const mixed = await api("/schedule", { ...ownerHeaders, ...otherTokenHeaders }).then((response) => response.json());
   assert.equal(mixed.tasks.length, 0, "业务接口即便带另一个用户 Cookie 也只使用 Bearer 所属用户");

@@ -143,7 +143,7 @@ html:not([data-skin="liquid"]) body.dark {
     color:var(--ink) !important;
     -webkit-backdrop-filter:var(--material-blur);
     backdrop-filter:var(--material-blur);
-    transition:background-color .22s var(--ease-fluid),box-shadow .22s var(--ease-fluid);
+    transition:background-color var(--motion-fast) var(--ease-fluid),box-shadow var(--motion-fast) var(--ease-fluid);
   }
   html:not([data-skin="liquid"]) body :where(button:not(.sidebar-backdrop),summary,.quick-add,.mobile-bottom-nav,.live-clock):not(:where(#scheduleView,#scheduleView *)) {
     background-image:radial-gradient(ellipse at 12% -20%,rgba(255,255,255,.8),transparent 66%),linear-gradient(160deg,rgba(255,255,255,.30),transparent 45%,rgba(160,170,182,.12) 72%,rgba(255,255,255,.22)) !important;
@@ -151,7 +151,9 @@ html:not([data-skin="liquid"]) body.dark {
   html:not([data-skin="liquid"]) body.dark :where(button,summary,.quick-add,.mobile-bottom-nav,.live-clock):not(:where(#scheduleView,#scheduleView *)) {
     background-image:linear-gradient(145deg,rgba(220,233,246,.05),transparent 65%) !important;
   }
-  html:not([data-skin="liquid"]) body :where(button:not(:disabled):not(.sidebar-backdrop),summary):hover:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--accent-soft) !important; }
+  @media (hover:hover) and (pointer:fine) {
+    html:not([data-skin="liquid"]) body :where(button:not(:disabled):not(.sidebar-backdrop),summary):hover:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--accent-soft) !important; }
+  }
   html:not([data-skin="liquid"]) body :is(
     .primary-button,.quick-submit,.mobile-smart-submit,.nav-item.active,.view-switch button.active,
     .segmented button.selected,.auth-tabs button.active,.data-hub-tabs button[aria-selected="true"],
@@ -180,7 +182,10 @@ html:not([data-skin="liquid"]) body.dark {
     html:not([data-skin="liquid"]) body.dark { --chrome:#3b4552 !important; --action-fill:#4f6074 !important; }
   }
   @media (prefers-reduced-motion:reduce) {
-    html:not([data-skin="liquid"]) body :where(button,summary,input,textarea,select) { transition:none !important; }
+    html:not([data-skin="liquid"]) body :where(button,summary,input,textarea,select) {
+      transition-property:color,background-color,border-color,box-shadow,opacity !important;
+      transition-duration:var(--motion-fast) !important;
+    }
   }
   @media (forced-colors:active) {
     html:not([data-skin="liquid"]) body,html:not([data-skin="liquid"]) body.dark {
@@ -269,7 +274,7 @@ html body .preview-classic i:first-child:not(:where(#scheduleView,#scheduleView 
   position:absolute; inset:0; z-index:2; border-radius:inherit;
   pointer-events:none; overflow:hidden; contain:paint;
   background:radial-gradient(ellipse 420px 240px at var(--light-x,50%) var(--light-y,0%),rgba(255,255,255,.16),transparent 78%);
-  animation:material-light-enter .3s ease-out both;
+  animation:material-light-enter var(--motion-fast) var(--ease-out) both;
 }
 .material-light-rim {
   position:absolute; inset:0; border-radius:inherit; padding:1.5px;
@@ -286,6 +291,12 @@ html body .preview-classic i:first-child:not(:where(#scheduleView,#scheduleView 
 .material-light-glass .material-light-rim { padding:2px; }
 body.dark .material-light { --light-opacity:.55; }
 @keyframes material-light-enter { from { opacity:0; } to { opacity:var(--light-opacity); } }
+html body :where(button,[role="button"]).material-light-host { transform:none !important; }
+html:not([data-skin="liquid"]) body :where(button,[role="button"]):is(:active,.is-pointer-pressed) {
+  background:color-mix(in srgb,var(--accent-soft) 72%,var(--card));
+  box-shadow:inset 0 2px 6px color-mix(in srgb,var(--ink) 12%,transparent),inset 0 -1px 1px var(--glass-rim);
+}
+html:not([data-skin="liquid"]) body :where(.material-light-host) > .material-light { transform-origin:center; }
 @media (prefers-reduced-motion:reduce), (forced-colors:active) {
   .material-light { display:none !important; animation:none !important; }
 }

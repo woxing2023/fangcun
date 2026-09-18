@@ -10,17 +10,17 @@
     <link rel="manifest" href="manifest.webmanifest?v=2.8.0" />
     <link rel="stylesheet" href="calendar-surface.css?v=1" />
     <link rel="stylesheet" href="mobile-ui.css?v=2" />
-    <link rel="stylesheet" href="mobile-material.css?v=2" />
+    <link rel="stylesheet" href="mobile-material.css?v=3" />
     <link rel="stylesheet" href="mobile-calendar.css?v=1" />
-    <link rel="stylesheet" href="styles.css?v=2.8.0" />
+    <link rel="stylesheet" href="styles.css?v=2.8.0-frontend1" />
     <link rel="stylesheet" href="v22-layout.css?v=2.8.0" />
-    <link rel="stylesheet" href="appearance.css?v=6" />
-    <link rel="stylesheet" href="xuan.css?v=3" />
-    <link rel="stylesheet" href="liquid.css?v=5" />
-    <script src="appearance.js?v=7"></script>
-    <script src="liquid-select.js?v=6" defer></script>
-    <script src="material-light.js?v=5" defer></script>
-    <script src="touch-material.js?v=2" defer></script>
+    <link rel="stylesheet" href="appearance.css?v=7" />
+    <link rel="stylesheet" href="xuan.css?v=4" />
+    <link rel="stylesheet" href="liquid.css?v=6" />
+    <script src="appearance.js?v=8"></script>
+    <script src="liquid-select.js?v=7" defer></script>
+    <script src="material-light.js?v=6" defer></script>
+    <script src="touch-material.js?v=3" defer></script>
     <script src="appearance-controls.js?v=1" defer></script>
   </head>
   <body data-active-view="today">
@@ -252,7 +252,7 @@
         <div class="mobile-sheet-handle" aria-hidden="true"></div>
         <header><div><span class="eyebrow">快速添加</span><h2>想到什么，直接说</h2></div><button type="button" class="close-button" data-close-dialog="mobileCreateModal" aria-label="关闭">×</button></header>
         <textarea id="mobileCaptureInput" rows="4" placeholder="例如：明天下午三点交物理作业，重要紧急，提前一小时提醒"></textarea>
-        <div class="mobile-capture-examples"><button type="button" data-capture-example="周三下午两点组会，重要，提前30分钟提醒">添加日程</button><button type="button" data-capture-example="周五晚上十点前交化学作业，重要紧急">添加 DDL</button><button type="button" data-capture-example="课程 大学物理，周二、周五第1-2节，1-17周，湖畔校区B12-201，张老师，提前15分钟提醒">添加课程</button></div>
+        <div class="mobile-capture-examples"><button type="button" data-capture-example="周三下午两点组会，重要，提前30分钟提醒">添加日程</button><button type="button" data-capture-example="周五晚上十点前交化学作业，重要紧急">添加 DDL</button><button type="button" data-capture-example="课程 大学物理，周二、周五第1-2节，1-17周，云谷校区E13-109，张老师，提前15分钟提醒">添加课程</button></div>
         <button class="mobile-smart-submit" type="submit"><span>✦</span><strong>智能识别并预览</strong></button>
         <div class="mobile-create-divider"><span>或者手动填写</span></div>
         <div class="mobile-create-actions">
@@ -272,14 +272,21 @@
         <label class="field field-wide"><span>备注</span><textarea id="taskNotes" rows="3" placeholder="补充必要的背景、想法或完成标准"></textarea></label>
         <div class="form-grid">
           <label class="field"><span>事项类型</span><select id="taskType"><option value="task">普通任务</option><option value="event">日程事件</option><option value="assignment">课程作业</option><option value="exam">考试</option><option value="review">复习任务</option></select></label>
-          <label class="field"><span>开始日期</span><input id="taskStartDate" type="date" /></label>
-          <label class="field"><span>开始时间</span><input id="taskStartTime" type="time" /></label>
-          <label class="field"><span>结束日期</span><input id="taskEndDate" type="date" /></label>
-          <label class="field"><span>结束时间</span><input id="taskEndTime" type="time" /></label>
-          <label class="field"><span>地点</span><input id="taskLocation" maxlength="120" placeholder="教室、会议室或地址" /></label>
-          <label class="field"><span>截止日期</span><input id="taskDue" type="date" /></label>
-          <label class="field"><span>截止时间</span><input id="taskDueTime" type="time" /></label>
-          <label class="field"><span>提醒</span><select id="taskReminder"><option value="-1">不提醒</option><option value="0">准时提醒</option><option value="10">提前 10 分钟</option><option value="30">提前 30 分钟</option><option value="60">提前 1 小时</option><option value="1440">提前 1 天</option></select></label>
+          <div class="field-pair field-wide" data-schedule-group="start">
+            <label class="field"><span>开始日期</span><input id="taskStartDate" type="date" /></label>
+            <label class="field"><span>开始时间</span><input id="taskStartTime" type="time" /></label>
+          </div>
+          <div class="field-pair field-wide" data-schedule-group="end">
+            <label class="field"><span>结束日期</span><input id="taskEndDate" type="date" /></label>
+            <label class="field"><span>结束时间</span><input id="taskEndTime" type="time" /></label>
+          </div>
+          <label class="field" data-schedule-group="location"><span>地点</span><input id="taskLocation" maxlength="120" placeholder="教室、会议室或地址" /></label>
+          <div class="field-pair field-wide" data-schedule-group="due">
+            <label class="field"><span>截止日期</span><input id="taskDue" type="date" /></label>
+            <label class="field"><span>截止时间</span><input id="taskDueTime" type="time" /></label>
+          </div>
+          <label class="field"><span>提醒</span><select id="taskReminder"><option value="-1">不提醒</option><option value="0">准时提醒</option><option value="10">提前 10 分钟</option><option value="30">提前 30 分钟</option><option value="60">提前 1 小时</option><option value="1440">提前 1 天</option><option value="__custom__">自定义分钟…</option></select></label>
+          <label class="field hidden" id="taskReminderCustomField"><span>提前分钟数</span><input id="taskReminderCustom" type="number" min="1" step="1" inputmode="numeric" /><small class="field-hint">输入正整数；不提醒或准时请使用上方选项。</small></label>
           <label class="field alarm-mode-field"><span>提醒方式</span><span class="switch-label"><input id="taskAlarmMode" type="checkbox" /> 系统闹钟模式</span><small>24 小时内会打开系统时钟供你确认；更远的日期自动使用方寸精确通知。</small></label>
           <label class="field"><span>重复</span><select id="taskRepeat"><option value="none">不重复</option><option value="daily">每天</option><option value="weekdays">每个工作日</option><option value="weekly">每周</option><option value="monthly">每月</option></select></label>
           <label class="field"><span>预计耗时（分钟，可选）</span><input id="taskEstimate" type="number" min="5" max="1440" step="5" placeholder="例如 45" /></label>
@@ -303,14 +310,15 @@
         <div class="form-grid">
           <label class="field"><span>课程名称</span><input id="courseName" required maxlength="60" placeholder="例如：机器学习" /></label>
           <label class="field"><span>课程配色</span><select id="courseColor"><option value="auto">自动 · 同课同色、同类同色系</option><option value="#4F6BED">手动 · 曜石蓝</option><option value="#0FA77A">手动 · 翡翠绿</option><option value="#F59E0B">手动 · 明亮琥珀</option><option value="#EF5B5B">手动 · 珊瑚红</option><option value="#8B5CF6">手动 · 电光紫</option><option value="#0891B2">手动 · 湖水青</option><option value="#F97316">手动 · 活力橙</option><option value="#EC4899">手动 · 莓果粉</option></select></label>
-          <label class="field"><span>课程代码</span><input id="courseCode" maxlength="40" placeholder="例如：GEN1001_1188" /></label>
-          <label class="field"><span>校区</span><input id="courseCampus" maxlength="40" placeholder="例如：湖畔校区" /></label>
+          <label class="field"><span>课程代码</span><input id="courseCode" maxlength="40" placeholder="例如：PHY1006_1188" /></label>
+          <label class="field"><span>校区</span><input id="courseCampus" maxlength="40" placeholder="例如：云谷校区" /></label>
           <label class="field"><span>教师</span><input id="courseTeacher" maxlength="40" placeholder="教师姓名" /></label>
           <label class="field"><span>教室</span><input id="courseLocation" maxlength="60" placeholder="教学楼与教室" /></label>
           <label class="field"><span>学分</span><input id="courseCredits" type="number" min="0" max="30" step="0.5" placeholder="例如 3" /></label>
           <label class="field"><span>课程主页/资料链接</span><input id="courseLink" type="url" maxlength="300" placeholder="https://…" /></label>
           <label class="field"><span>星期</span><select id="courseDay"><option value="1">星期一</option><option value="2">星期二</option><option value="3">星期三</option><option value="4">星期四</option><option value="5">星期五</option><option value="6">星期六</option><option value="7">星期日</option></select></label>
-          <label class="field"><span>提醒</span><select id="courseReminder"><option value="-1">不提醒</option><option value="5">提前 5 分钟</option><option value="10" selected>提前 10 分钟</option><option value="20">提前 20 分钟</option><option value="30">提前 30 分钟</option></select></label>
+          <label class="field"><span>提醒</span><select id="courseReminder"><option value="-1">不提醒</option><option value="5">提前 5 分钟</option><option value="10" selected>提前 10 分钟</option><option value="20">提前 20 分钟</option><option value="30">提前 30 分钟</option><option value="__custom__">自定义分钟…</option></select></label>
+          <label class="field hidden" id="courseReminderCustomField"><span>提前分钟数</span><input id="courseReminderCustom" type="number" min="1" step="1" inputmode="numeric" /><small class="field-hint">输入正整数；不提醒或准时请使用上方选项。</small></label>
           <label class="field alarm-mode-field"><span>提醒方式</span><span class="switch-label"><input id="courseAlarmMode" type="checkbox" /> 系统闹钟模式</span><small>24 小时内的下一次课程会交给系统时钟确认，远期课程仍由方寸提醒。</small></label>
           <label class="field"><span>开始节次</span><select id="courseStartSection"></select></label>
           <label class="field"><span>结束节次</span><select id="courseEndSection"></select></label>
@@ -333,7 +341,7 @@
           <label class="field"><span>总周数</span><input id="semesterWeeks" type="number" min="1" max="30" required /></label>
           <label class="field"><span>显示周末</span><select id="semesterWeekend"><option value="true">显示周六、周日</option><option value="false">仅显示周一至周五</option></select></label>
         </div>
-        <div class="slot-settings"><div class="panel-title"><span>作息时间</span><div class="inline-actions"><button type="button" class="text-button" id="universitySlotPresetBtn">使用标准 13 节大学作息</button><button type="button" class="text-button" id="addTimeSlotBtn">＋ 增加节次</button></div></div><p class="field-hint">每一小节单独设置，课程可以跨任意节次，例如 4–5、6–8、11–13 节。</p><div id="timeSlotEditor"></div></div>
+        <div class="slot-settings"><div class="panel-title"><span>作息时间</span><div class="inline-actions"><button type="button" class="text-button" id="universitySlotPresetBtn">使用西湖大学 13 节作息</button><button type="button" class="text-button" id="addTimeSlotBtn">＋ 增加节次</button></div></div><p class="field-hint">每一小节单独设置，课程可以跨任意节次，例如 4–5、6–8、11–13 节。</p><div id="timeSlotEditor"></div></div>
         <div class="modal-footer"><span></span><span></span><button type="button" class="secondary-button" data-close-dialog="semesterModal">取消</button><button type="submit" class="primary-button">保存设置</button></div>
       </form>
     </dialog>
@@ -540,6 +548,6 @@
     <script src="smart-parser.js?v=2.8.0"></script>
     <script src="docx-schedule-parser.js?v=2.8.0"></script>
     <script src="link-contract.js?v=1"></script>
-    <script src="app.js?v=2.8.0"></script>
+    <script src="app.js?v=2.8.0-frontend1"></script>
   </body>
 </html>

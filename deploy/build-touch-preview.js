@@ -3,7 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {chromium}=require(process.env.FANGCUN_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(__dirname,'..');
-const build='20260911-calendar-v3';
+const build='20260915-frontend-lab-v1';
 const files=new Map(fs.readdirSync(root).filter(file=>/\.(js|css|html|svg|png|woff2|webmanifest)$/.test(file)&&fs.statSync(path.join(root,file)).isFile()).map(file=>[file,fs.readFileSync(path.join(root,file))]));
 const read=name=>files.get(name)?.toString()||'';
 const types={'.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'};
@@ -67,7 +67,7 @@ const devices={desktop:{width:1536,height:900,touch:false},portrait:{width:390,h
  // The fine-pointer stylesheet is unmodified. Only touch snapshots receive
  // emulated coarse media so their layout also survives review with a mouse.
  const touchCSS=css.replace(/\(pointer:\s*coarse\)/g,'(min-width:0px)').replace(/\(pointer:\s*fine\)/g,'(max-width:0px)').replace(/\(hover:\s*none\)/g,'(min-width:0px)').replace(/\(hover:\s*hover\)/g,'(max-width:0px)');
- const gpu='window.__previewOptics=(()=>{'+read('liquid-renderer.js').replace('export function createRenderer','function createRenderer')+'\nreturn {createRenderer};})();';
+ const gpu='window.__previewOptics=(()=>{'+read('liquid-renderer.js').replace(/^export\s+/gm,'')+'\nreturn {createRenderer};})();';
  const controller=read('touch-material.js').replace("import('./liquid-renderer.js')","Promise.resolve(window.__previewOptics)");
  const bridge=`document.addEventListener('submit',event=>event.preventDefault());document.addEventListener('click',event=>{const link=event.target.closest('a[href]');if(link)event.preventDefault();const button=event.target.closest('button');if(button?.id==='calendarListBtn')parent.postMessage({calendarPreviewLayout:'toggle'},'*');if(button?.id==='calendarZoomFit')parent.postMessage({calendarPreviewLayout:'overview'},'*');if(button?.dataset.scheduleMode && ['week','timetable'].includes(button.dataset.scheduleMode))parent.postMessage({calendarPreviewMode:button.dataset.scheduleMode},'*');});`;
  const payload={build,devices,snapshots,styles:{desktop:css,touch:touchCSS},assets,optics:gpu+'\n'+controller+'\n'+bridge};

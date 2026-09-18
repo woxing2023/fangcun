@@ -2,7 +2,7 @@
    A few shared chrome surfaces capture the backdrop; the timetable paints
    cached fiber, color and edge recipes. touch-material.js owns live optics. */
 @layer mobile-material {
-  html[data-material-performance="touch"] body {
+  html[data-material-performance="touch"]:not([data-skin="liquid"]) body {
     --bg:#dce0e3 !important; --surface:#f4f2ed !important; --card:#f7f7f5 !important;
     --ink:#263447 !important; --muted:#66717e !important;
     --accent:#47679f !important; --accent-soft:#e1e8f3 !important;
@@ -41,10 +41,14 @@
     background:radial-gradient(ellipse at 8% 2%,rgba(255,255,255,.78),transparent 55%),radial-gradient(ellipse at 96% 70%,rgba(119,143,174,.12),transparent 60%),var(--bg) !important;
   }
   html[data-material-performance="touch"][data-skin="liquid"] body {
-    --xuan-base:#eff0ec !important; --mobile-tick:#edf0f1;
-    --mobile-glass:rgba(235,244,255,.61); --mobile-glass-bottom:rgba(112,151,197,.16);
+    --mobile-glass:rgba(244,247,249,.62); --mobile-glass-edge:rgba(255,255,255,.82); --mobile-glass-top:rgba(255,255,255,.86); --mobile-glass-bottom:rgba(176,190,201,.15);
+    --mobile-glass-shadow:inset 0 1px 0 rgba(255,255,255,.92), inset 0 -1px 0 rgba(75,95,110,.13), 0 3px 8px -4px rgba(58,69,77,.21);
+    --mobile-panel-shadow:inset 0 1px 0 rgba(255,255,255,.90), inset 0 -1px 0 rgba(101,112,121,.14), 0 8px 20px -13px rgba(58,69,77,.28);
+    --mobile-record-shadow:inset 0 1px 0 rgba(255,255,255,.88), inset 0 -1px 0 rgba(101,112,121,.13), 0 2px 4px -1px rgba(58,69,77,.13);
+    --mobile-record-top:rgba(255,255,255,.69); --mobile-record-bottom:rgba(176,190,201,.055); --mobile-record-base:#f6f8f9; --mobile-tick:#edf0f1;
+    --material-blur:none !important; --liquid-dialog:rgba(246,248,249,.92) !important; --xuan-base:#eff0ec !important;
   }
-  html[data-material-performance="touch"] body.dark {
+  html[data-material-performance="touch"]:not([data-skin="liquid"]) body.dark {
     --bg:#202834 !important; --surface:#303640 !important; --card:#35414f !important;
     --ink:#ecf0f5 !important; --muted:#b2becd !important;
     --accent:#b0c8ed !important; --accent-soft:#3a4c68 !important;
@@ -68,7 +72,14 @@
     --xuan-size:100% 100%,360px 360px,100% 100% !important;
     background:radial-gradient(ellipse at 8% 0,rgba(125,156,197,.13),transparent 64%),var(--bg) !important;
   }
-  html[data-material-performance="touch"][data-skin="liquid"] body.dark { --xuan-base:#303b49 !important; }
+  html[data-material-performance="touch"][data-skin="liquid"] body.dark {
+    --mobile-glass:rgba(60,69,81,.65); --mobile-glass-edge:rgba(206,219,234,.23); --mobile-glass-top:rgba(224,233,243,.16); --mobile-glass-bottom:rgba(0,0,0,.24);
+    --mobile-glass-shadow:inset 0 1px 0 rgba(224,233,243,.23), inset 0 -1px 0 rgba(0,0,0,.28), 0 3px 8px -3px rgba(0,0,0,.25);
+    --mobile-panel-shadow:inset 0 1px 0 rgba(224,233,243,.17), inset 0 -1px 0 rgba(0,0,0,.25), 0 8px 20px -12px rgba(0,0,0,.36);
+    --mobile-record-shadow:inset 0 1px 0 rgba(224,233,243,.24), inset 0 -1px 0 rgba(0,0,0,.23), 0 2px 4px -1px rgba(0,0,0,.24);
+    --mobile-record-top:rgba(224,233,243,.12); --mobile-record-bottom:rgba(0,0,0,.08); --mobile-record-base:#3c4551; --mobile-tick:#2d333b;
+    --liquid-dialog:rgba(60,69,81,.94) !important; --xuan-base:#303b49 !important;
+  }
 
   /* Only named functional hosts reset legacy per-control backdrop captures.
      The live touch overlay, its canvas and its pseudo-elements are untouched. */
@@ -95,7 +106,10 @@
     background-color:var(--liquid-dialog) !important;
     box-shadow:inset 0 1px 0 var(--mobile-glass-edge),0 18px 48px -16px rgba(9,20,35,.38) !important;
   }
-  html[data-material-performance="touch"] body dialog::backdrop { background:rgba(13,22,36,.31) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+  /* Touch scrim: liquid uses the neutral lab values; classic keeps the legacy scrim. */
+  html[data-material-performance="touch"]:not([data-skin="liquid"]) body dialog::backdrop { background:rgba(13,22,36,.31) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+  html[data-material-performance="touch"][data-skin="liquid"] body dialog::backdrop { background:rgba(32,39,45,.31) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+  html[data-material-performance="touch"][data-skin="liquid"] body.dark dialog::backdrop { background:rgba(0,0,0,.36) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 
   /* The glass edge is drawn once per control; illumination moves in the
      shared touch renderer. Color transitions leave text and hit areas fixed. */
@@ -104,7 +118,7 @@
     border-color:var(--mobile-glass-edge) !important;
     box-shadow:var(--mobile-glass-shadow) !important;
     color:var(--ink) !important;
-    transition:background-color 160ms ease,color 160ms ease !important;
+    transition:background-color var(--motion-fast) var(--ease-fluid),color var(--motion-fast) var(--ease-fluid) !important;
     text-shadow:none !important;
   }
   html[data-material-performance="touch"] body :where(input,textarea,select) {
@@ -223,7 +237,9 @@
     outline:2px solid var(--accent) !important; outline-offset:2px !important;
   }
   @media (forced-colors:active) {
-    html[data-material-performance="touch"] body,html[data-material-performance="touch"] body.dark {
+    html[data-material-performance="touch"] body,html[data-material-performance="touch"] body.dark,
+    html[data-material-performance="touch"]:not([data-skin="liquid"]) body,html[data-material-performance="touch"]:not([data-skin="liquid"]) body.dark,
+    html[data-material-performance="touch"][data-skin="liquid"] body,html[data-material-performance="touch"][data-skin="liquid"] body.dark {
       --bg:Canvas !important; --surface:Canvas !important; --card:Canvas !important;
       --ink:CanvasText !important; --muted:CanvasText !important; --accent:Highlight !important;
       --accent-soft:Canvas !important; --action-fill:Highlight !important; --action-ink:HighlightText !important;

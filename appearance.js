@@ -1,6 +1,10 @@
 /* Appearance owns only device preferences and decorative interaction; no app data. */
 (() => {
   "use strict";
+  const THEME_COLORS = Object.freeze({
+    classic: Object.freeze({ light: "#f4f2ed", dark: "#1f211f" }),
+    liquid: Object.freeze({ light: "#e9ecef", dark: "#24282e" }),
+  });
   const root = document.documentElement;
   // Touch layouts use the shared GPU optical layer in touch-material.js.
   // Desktop pointer optics retain their existing adapter.
@@ -15,6 +19,11 @@
   const read = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch { return fallback; } };
   root.dataset.skin = read("fangcun-skin", "classic") === "liquid" ? "liquid" : "classic";
   root.dataset.mode = read("fangcun-theme", "light") === "dark" ? "dark" : "light";
+  const syncThemeColor = () => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = THEME_COLORS[root.dataset.skin]?.[root.dataset.mode] || THEME_COLORS.classic.light;
+  };
+  syncThemeColor();
   document.addEventListener("DOMContentLoaded", () => {
     const modal = document.getElementById("appearanceModal");
     document.body.classList.toggle("dark", root.dataset.mode === "dark");
@@ -29,14 +38,49 @@
     let frame = 0;
     let latest = null;
     let lastTrail = 0;
-    let renderer = null, rendererLoading = null, rendererFailed = false;
+    let renderer = null, rendererLoading = null, rendererFailed = false, liquidMotion = null;
     let rendererFactory = null;
+    const dialogAnimations = new WeakMap();
+    const animatedDialogs = new Set();
+    const cancelDialogAnimation = (dialog, settle = true) => {
+      const entry = dialogAnimations.get(dialog);
+      if (!entry) return;
+      entry.animation.cancel(); dialogAnimations.delete(dialog); animatedDialogs.delete(dialog);
+      dialog.style.opacity = ''; dialog.style.transform = '';
+      if (settle && entry.direction === 'close' && dialog.open) dialog.close(entry.returnValue);
+    };
+    const settleDialogAnimations = () => [...animatedDialogs].forEach(dialog => cancelDialogAnimation(dialog));
+    function openDialog(dialog) {
+      if (!dialog) return;
+      cancelDialogAnimation(dialog, false);
+      if (dialog.open) return;
+      dialog.showModal();
+      if (reduced.matches || forced.matches || typeof dialog.animate !== "function") return;
+      const animation = dialog.animate([{opacity:0,transform:"translateY(8px) scale(.98)"},{opacity:1,transform:"translateY(0) scale(1)"}], {duration:250,easing:"cubic-bezier(.23,1,.32,1)"});
+      const entry = { animation, direction:'open', returnValue:'' };
+      dialogAnimations.set(dialog, entry); animatedDialogs.add(dialog);
+      animation.finished.catch(() => {}).finally(() => { if (dialogAnimations.get(dialog) === entry) { dialogAnimations.delete(dialog); animatedDialogs.delete(dialog); dialog.style.opacity = ''; dialog.style.transform = ''; } });
+    }
+    function closeDialog(dialog, returnValue = "") {
+      if (!dialog?.open) return;
+      cancelDialogAnimation(dialog, false);
+      if (reduced.matches || forced.matches || typeof dialog.animate !== "function") { dialog.close(returnValue); return; }
+      const animation = dialog.animate([{opacity:1,transform:"translateY(0) scale(1)"},{opacity:0,transform:"translateY(4px) scale(.99)"}], {duration:160,easing:"cubic-bezier(.23,1,.32,1)"});
+      const entry = { animation, direction:'close', returnValue };
+      dialogAnimations.set(dialog, entry); animatedDialogs.add(dialog);
+      animation.finished.catch(() => {}).finally(() => {
+        if (dialogAnimations.get(dialog) !== entry) return;
+        dialogAnimations.delete(dialog); animatedDialogs.delete(dialog); dialog.style.opacity = ''; dialog.style.transform = ''; if (dialog.open) dialog.close(returnValue);
+      });
+    }
     // Extension point for native DOM, custom elements, or framework-mounted controls.
     window.FangcunAppearance = Object.freeze({
       registerRenderer(factory) {
         if (typeof factory !== 'function') throw new TypeError('Renderer factory must be a function');
         clear(); renderer?.dispose(); renderer=null; rendererLoading=null; rendererFactory=factory; rendererFailed=false;
       },
+      openDialog,
+      closeDialog,
       get skin() { return root.dataset.skin; },
       get effectsEnabled() { return effectsEnabled(); }
     });
@@ -44,15 +88,37 @@
       if (rendererFailed || !effectsEnabled()) return;
       try {
         if (!renderer) {
-          rendererLoading ||= rendererFactory ? Promise.resolve(rendererFactory) : import('./liquid-renderer.js').then(module => module.createRenderer);
+          rendererLoading ||= rendererFactory ? Promise.resolve(rendererFactory) : import('./liquid-renderer.js').then(module => { liquidMotion = module.LIQUID_MOTION; return module.createRenderer; });
           const factory = await rendererLoading;
           if (active !== state || !effectsEnabled() || root.dataset.skin !== 'liquid') return;
           renderer ||= factory();
         }
-        if (active === state) renderer.mount(state.lens, state.rect);
+        if (active === state) renderer.mount(state.lens, state.rect, {kind:"glass", dark:root.dataset.mode === "dark", radius:state.radius, tint:state.tint});
       } catch { rendererFailed=true; renderer?.dispose(); renderer=null; }
     }
     function releaseRenderer() { clear(); renderer?.dispose(); renderer=null; }
+    const materialHosts = '.sidebar,.topbar,.mobile-bottom-nav,.quick-add,.week-toolbar,.sidebar-note,.matrix-board,.quadrant,.list-panel,.today-next,.today-section,.today-aside,.today-progress,.project-card,.project-dashboard > div,.admin-card,.admin-stat,.admin-user,.admin-detail,.schedule-board-wrap,.year-calendar,.month-calendar,.week-calendar,.mini-month,.overview-day,.overview-summary > div,.reminders-card,.calendar-integration-setting,.calendar-subscription-setting,.smart-preview-card,.smart-source,.smart-time-suggestion,.decision-box,.quadrant-preview,.course-task-actions,.course-linked-panel,.sync-recovery,.update-banner,.view-switch,.calendar-zoom-tools,.data-hub-tabs,.auth-tabs,.segmented,[data-material="glass"]';
+    const largeSurfaceObserver = typeof ResizeObserver === "function" ? new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const box = Array.isArray(entry.borderBoxSize) ? entry.borderBoxSize[0] : entry.borderBoxSize;
+        const width = Number(box?.inlineSize) || entry.target.offsetWidth;
+        const height = Number(box?.blockSize) || entry.target.offsetHeight;
+        const next = width >= 160 && height >= 100 ? "true" : "false";
+        if (entry.target.dataset.largeSurface !== next) entry.target.dataset.largeSurface = next;
+      }
+    }) : null;
+    const observeMaterialHosts = rootNode => {
+      if (!largeSurfaceObserver || !(rootNode instanceof Element)) return;
+      if (rootNode.matches(materialHosts)) largeSurfaceObserver.observe(rootNode);
+      rootNode.querySelectorAll(materialHosts).forEach(node => largeSurfaceObserver.observe(node));
+    };
+    observeMaterialHosts(document.body);
+    new MutationObserver(records => {
+      for (const record of records) {
+        record.removedNodes.forEach(node => { if (node.nodeType === 1) largeSurfaceObserver?.unobserve(node); });
+        record.addedNodes.forEach(node => { if (node.nodeType === 1) observeMaterialHosts(node); });
+      }
+    }).observe(document.body, {childList:true,subtree:true});
     const save = (key, value) => {
       try { localStorage.setItem(key, value); status.textContent = "已保存，仅在当前设备生效。"; }
       catch { status.textContent = "已应用。浏览器无法保存偏好，下次打开需重新选择。"; }
@@ -61,9 +127,9 @@
       document.body.classList.toggle("dark", root.dataset.mode === "dark");
       mode.value = root.dataset.mode;
       modal.querySelectorAll('[name="skin"]').forEach(input => { input.checked = input.value === root.dataset.skin; });
-      document.querySelector('meta[name="theme-color"]').content = root.dataset.mode === "dark" ? (root.dataset.skin === "liquid" ? "#202934" : "#1f211f") : root.dataset.skin === "liquid" ? "#e8edf2" : "#f4f2ed";
+      syncThemeColor();
     };
-    document.getElementById("appearanceSettingsBtn").addEventListener("click", () => { sync(); modal.showModal(); });
+    document.getElementById("appearanceSettingsBtn").addEventListener("click", () => { sync(); openDialog(modal); });
     modal.addEventListener("change", event => {
       if (event.target.name === "skin") { root.dataset.skin = event.target.value; save("fangcun-skin", root.dataset.skin); releaseRenderer(); }
       if (event.target === mode) { root.dataset.mode = mode.value; save("fangcun-theme", mode.value); }
@@ -74,7 +140,7 @@
       const nextMode = document.body.classList.contains("dark") ? "dark" : "light";
       if (root.dataset.mode !== nextMode) root.dataset.mode = nextMode;
       mode.value = root.dataset.mode;
-      document.querySelector('meta[name="theme-color"]').content = root.dataset.mode === "dark" ? (root.dataset.skin === "liquid" ? "#202934" : "#1f211f") : root.dataset.skin === "liquid" ? "#e8edf2" : "#f4f2ed";
+      syncThemeColor();
     }).observe(document.body, { attributes:true, attributeFilter:["class"] });
     window.addEventListener("storage", event => {
       if (event.key === "fangcun-skin") root.dataset.skin = event.newValue === "liquid" ? "liquid" : "classic";
@@ -84,8 +150,8 @@
     function clear() {
       cancelAnimationFrame(frame); frame = 0;
       renderer?.unmount();
+      trailPoint = null;
       if (!active) return;
-      active.animations.forEach(animation => animation.cancel());
       active.lens.remove();
       if (active.positionChanged) active.target.style.position = active.position;
       active = null;
@@ -100,12 +166,12 @@
       const rect = control.getBoundingClientRect();
       const lens = document.createElement("span");
       lens.className = "liquid-lens"; lens.setAttribute("aria-hidden", "true");
-      const caustic = document.createElement("span"); caustic.className = "liquid-caustic"; lens.append(caustic);
       const computed = getComputedStyle(control);
       const dialog = control.closest("dialog");
       const dialogRect = dialog?.getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
-      active = { target:control, lens, rect, position:control.style.position, positionChanged:false, animations:new Set() };
+      const tint = computed.getPropertyValue("--liquid-glass-tint").trim().split(/\s+/).map(value => Number(value) / 255).filter(Number.isFinite);
+      active = { target:control, lens, rect, radius:parseFloat(computed.borderTopLeftRadius) || 0, tint:tint.length === 3 ? tint : undefined, position:control.style.position, positionChanged:false };
       if (dialog) {
         // A backdrop-filter makes the dialog a fixed-position containing block.
         // Use its padding-box coordinates; never move/resize the real control.
@@ -121,19 +187,18 @@
       ensureRenderer(active);
       return active;
     }
-    function particle(state, x, y, trail) {
-      renderer?.pulse(x/state.rect.width, y/state.rect.height, trail ? .3 : 1);
-      if (state.lens.childElementCount > 16) return;
-      const node = document.createElement("span"); node.className = trail ? "liquid-trail" : "liquid-wave";
-      node.style.left = `${x}px`; node.style.top = `${y}px`; state.lens.append(node);
-      const scale = trail ? 2.8 : Math.max(state.rect.width, state.rect.height) / 10;
-      const animation = node.animate([
-        { transform:"translate(-50%,-50%) scale(.3)", opacity:trail ? .5 : .8 },
-        { transform:`translate(-50%,-50%) scale(${scale})`, opacity:0 }
-      ], { duration:trail ? 650 : 900, easing:"cubic-bezier(.22,1,.36,1)" });
-      state.animations.add(animation);
-      animation.onfinish = () => { node.remove(); state.animations.delete(animation); };
+    function pulse(state, x, y, kind, segment = {}) {
+      const trail = kind === "trail";
+      if (trail) {
+        const trailSpeed = Math.min(1.5, segment.distance / Math.max(segment.dtSeconds, 0.008) / 650);
+        const labTrail = (liquidMotion?.trailStrength || 0) * 1.05
+          * (1.1 + trailSpeed) * Math.min(1, segment.distance / 8);
+        const energy = labTrail * (renderer?.getStats?.().profile?.amplitude || 0);
+        state.lens.style.setProperty("--trail-energy", String(energy));
+      }
+      renderer?.pulse(x/state.rect.width, y/state.rect.height, kind);
     }
+    let trailPoint = null;
     document.addEventListener("pointermove", event => {
       if (event.pointerType === "touch" || !effectsEnabled()) return;
       latest = event;
@@ -142,23 +207,22 @@
         frame = 0;
         const state = surface(latest.target); if (!state) { clear(); return; }
         const x = latest.clientX - state.rect.left, y = latest.clientY - state.rect.top;
-        state.lens.style.setProperty("--water-x", `${x}px`); state.lens.style.setProperty("--water-y", `${y}px`);
         renderer?.move(x/state.rect.width,y/state.rect.height);
-        // Shape response stays in the decorative lens, preserving circular controls
-        // and segmented ends in the functional DOM.
-        state.lens.style.borderRadius = getComputedStyle(state.target).borderRadius;
-        if (performance.now() - lastTrail > 65) { particle(state, x, y, true); lastTrail = performance.now(); }
+        const now = performance.now();
+        const distance = trailPoint ? Math.hypot(x - trailPoint.x, y - trailPoint.y) : 0;
+        const dtSeconds = trailPoint ? Math.max((now - trailPoint.time) / 1000, 0.008) : 0.008;
+        if (now - lastTrail > 65) {
+          const pulseX = trailPoint ? (x + trailPoint.x) / 2 : x;
+          const pulseY = trailPoint ? (y + trailPoint.y) / 2 : y;
+          pulse(state, pulseX, pulseY, "trail", {distance, dtSeconds}); lastTrail = now;
+        }
+        trailPoint = {x, y, time:now};
       });
     }, { passive:true });
     document.addEventListener("pointerdown", event => {
       const state = surface(event.target); if (!state) return;
-      particle(state, event.clientX - state.rect.left, event.clientY - state.rect.top, false);
+      pulse(state, event.clientX - state.rect.left, event.clientY - state.rect.top, "ripple");
     }, { passive:true });
-    document.addEventListener("keydown", event => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      const state = surface(event.target); if (!state) return;
-      particle(state, state.rect.width / 2, state.rect.height / 2, false);
-    });
     // Keep a lens for the lifetime of its target, including idle hover. Cleanup
     // follows real boundaries rather than a timer that mutates focused controls.
     document.addEventListener("pointerout", event => { if (!event.relatedTarget) clear(); }, { passive:true });
@@ -170,8 +234,8 @@
     function refreshPerformance() { updatePerformance(); releaseRenderer(); }
     window.addEventListener("resize", refreshPerformance);
     compact.addEventListener("change", refreshPerformance);
-    forced.addEventListener("change", releaseRenderer);
-    reduced.addEventListener("change", releaseRenderer);
+    forced.addEventListener("change", () => { settleDialogAnimations(); releaseRenderer(); });
+    reduced.addEventListener("change", () => { settleDialogAnimations(); releaseRenderer(); });
     window.addEventListener("pagehide", releaseRenderer);
     sync();
   });

@@ -30,7 +30,7 @@ powershell -ExecutionPolicy Bypass -File .\android\build-apk.ps1 -Variant Releas
 
 输出文件为 `release/fangcun-v2.7.0-release.apk`。以后升级必须使用同一密钥，否则 Android 不允许覆盖安装。
 
-## 安装到 Android
+## 安装到 REDMI
 
 打开“开发者选项 → USB 调试”，连接电脑并确认手机上的授权弹窗：
 

@@ -4,16 +4,31 @@
   const start = () => {
     const controls = new Map();
     let serial = 0, opened = null, scheduled = false;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+    const forced = matchMedia('(forced-colors: active)');
+    const motionDisabled = () => reduced.matches || forced.matches || document.hidden;
     const liquid = () => document.documentElement.dataset.skin === 'liquid';
     const eligible = select => !select.multiple && select.size <= 1 && !select.hasAttribute("data-inline-choice");
     const disabled = option => option.disabled || option.parentElement?.disabled;
-    function close() {
-      if (!opened) return;
-      const state = opened; opened = null;
-      if (typeof state.menu.hidePopover === 'function' && state.menu.matches(':popover-open')) state.menu.hidePopover();
-      state.menu.hidden = true;
+    function close(state = opened, {immediate = false} = {}) {
+      if (!state) return;
+      state.animation?.cancel(); state.animation = null;
+      if (opened === state) opened = null;
+      // ARIA state commits with the selection; the 160ms animation is visual exit only.
       state.trigger.setAttribute('aria-expanded', 'false');
       state.trigger.removeAttribute('aria-activedescendant');
+      const finish = () => {
+        if (typeof state.menu.hidePopover === 'function' && state.menu.matches(':popover-open')) state.menu.hidePopover();
+        state.menu.hidden = true; state.menu.style.pointerEvents = '';
+        state.trigger.setAttribute('aria-expanded', 'false');
+        state.trigger.removeAttribute('aria-activedescendant');
+      };
+      if (immediate || motionDisabled() || typeof state.menu.animate !== 'function') { finish(); return; }
+      state.menu.style.pointerEvents = 'none';
+      const offset = state.placement === 'above' ? '4px' : '-4px';
+      const animation = state.menu.animate([{opacity:1,transform:'translateY(0)'},{opacity:0,transform:`translateY(${offset})`}], {duration:160,easing:'cubic-bezier(.23,1,.32,1)'});
+      state.animation = animation;
+      animation.finished.catch(() => {}).finally(() => { if (state.animation === animation) { state.animation = null; finish(); } });
     }
     function place(state) {
       const rect = state.trigger.getBoundingClientRect();
@@ -22,7 +37,8 @@
       state.menu.style.width = `${Math.min(Math.max(rect.width, 180), innerWidth - 24)}px`;
       state.menu.style.maxHeight = `${Math.min(height, Math.max(below, rect.top - 12))}px`;
       state.menu.style.left = `${Math.max(12, Math.min(rect.left, innerWidth - state.menu.offsetWidth - 12))}px`;
-      state.menu.style.top = `${below >= Math.min(height, state.menu.scrollHeight) ? rect.bottom + 6 : Math.max(12, rect.top - state.menu.offsetHeight - 6)}px`;
+      state.placement = below >= Math.min(height, state.menu.scrollHeight) ? 'below' : 'above';
+      state.menu.style.top = `${state.placement === 'below' ? rect.bottom + 6 : Math.max(12, rect.top - state.menu.offsetHeight - 6)}px`;
     }
     function highlight(state, index) {
       state.active = index;
@@ -38,11 +54,19 @@
     function open(state) {
       sync(state);
       if (state.trigger.disabled) return;
-      close(); opened = state;
+      close(opened, {immediate:true}); state.animation?.cancel(); state.animation = null; opened = state;
       state.menu.hidden = false;
+      state.menu.style.pointerEvents = '';
       if (typeof state.menu.showPopover === 'function') state.menu.showPopover();
       state.trigger.setAttribute('aria-expanded', 'true');
       place(state);
+      if (!motionDisabled() && typeof state.menu.animate === 'function') {
+        const offset = state.placement === 'above' ? '-4px' : '4px';
+        state.menu.style.transformOrigin = state.placement === 'above' ? 'bottom' : 'top';
+        const animation = state.menu.animate([{opacity:0,transform:`translateY(${offset})`},{opacity:1,transform:'translateY(0)'}], {duration:200,easing:'cubic-bezier(.23,1,.32,1)'});
+        state.animation = animation;
+        animation.finished.catch(() => {}).finally(() => { if (state.animation === animation) state.animation = null; });
+      }
       highlight(state, state.select.selectedIndex);
     }
     function choose(state, index) {
@@ -115,7 +139,7 @@
       // popover puts it in the top layer, beyond the dialog's scroll clipping.
       (select.closest('dialog') || document.body).append(menu);
       trigger.setAttribute('aria-controls', menu.id);
-      const state = { select, trigger, text, menu, active: -1, signature: null, oldTab: select.getAttribute('tabindex'), oldAria: select.getAttribute('aria-hidden') };
+      const state = { select, trigger, text, menu, active: -1, signature: null, placement: 'below', animation: null, oldTab: select.getAttribute('tabindex'), oldAria: select.getAttribute('aria-hidden') };
       controls.set(select, state);
       select.classList.add('liquid-select-native');
       select.tabIndex = -1; select.setAttribute('aria-hidden', 'true');
@@ -177,6 +201,18 @@
       document.querySelectorAll('select').forEach(select => { if (eligible(select) && !controls.has(select)) attach(select); });
       controls.forEach(sync);
     }
+    const settleAnimations = () => controls.forEach(state => {
+      if (!state.animation) return;
+      state.animation.cancel(); state.animation = null;
+      state.menu.style.opacity = ''; state.menu.style.transform = '';
+      if (opened === state) {
+        state.menu.hidden = false; state.menu.style.pointerEvents = ''; state.trigger.setAttribute('aria-expanded', 'true'); place(state); highlight(state, state.select.selectedIndex);
+      } else {
+        state.menu.hidden = true; state.menu.style.pointerEvents = ''; state.trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+    reduced.addEventListener('change', settleAnimations);
+    forced.addEventListener('change', settleAnimations);
     let fullRefresh = false;
     const dirtyControls = new Set();
     const schedule = state => {

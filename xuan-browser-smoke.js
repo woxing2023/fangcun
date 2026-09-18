@@ -84,9 +84,13 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
           await page.waitForTimeout(180); // Allow hover's automatic scroll to settle.
           await panel.hover({position:{x:30,y:25}});
           await page.waitForTimeout(80);
-          assert.equal(await page.locator('.material-light').count(),1);
-          assert.equal(await page.locator('.material-light').getAttribute('aria-hidden'),'true');
-          assert.equal(await page.locator('.material-light').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+          if (skin === 'classic') {
+            assert.equal(await page.locator('.material-light').count(),1);
+            assert.equal(await page.locator('.material-light').getAttribute('aria-hidden'),'true');
+            assert.equal(await page.locator('.material-light').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+          } else {
+            assert.equal(await page.locator('.material-light').count(),0,'Liquid must not stack a second DOM light layer');
+          }
           const button=page.locator('#themeBtn');
           await button.scrollIntoViewIfNeeded();
           await page.waitForTimeout(180);
@@ -94,13 +98,18 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
           await button.hover(); await page.waitForTimeout(80);
           const after=await button.boundingBox();
           assert.deepEqual(after,before,'Optical movement must not move the hit target');
-          assert.equal(await button.locator('.material-light-glass').count(),1);
-          const complete=page.locator('.focus-task .complete-btn').first();
-          await complete.hover(); await page.waitForTimeout(180);
-          await complete.hover({position:{x:12,y:12}}); await page.waitForTimeout(80);
-          const circle=await complete.boundingBox(), light=await complete.locator('.material-light').boundingBox();
-          assert.ok(light && Math.abs(light.width-circle.width)<=4 && Math.abs(light.height-circle.height)<=4,
-            'Completion light must stay inside its circle, not cover the task row');
+          if (skin === 'classic') {
+            assert.equal(await button.locator('.material-light-glass').count(),1);
+            const complete=page.locator('.focus-task .complete-btn').first();
+            await complete.hover(); await page.waitForTimeout(180);
+            await complete.hover({position:{x:12,y:12}}); await page.waitForTimeout(80);
+            const circle=await complete.boundingBox(), light=await complete.locator('.material-light').boundingBox();
+            assert.ok(light && Math.abs(light.width-circle.width)<=4 && Math.abs(light.height-circle.height)<=4,
+              'Completion light must stay inside its circle, not cover the task row');
+          } else {
+            assert.equal(await button.locator('.material-light-glass').count(),0,'Liquid keeps optics off the button DOM');
+            assert.equal(await page.locator('.focus-task .material-light').count(),0);
+          }
         }
         await page.emulateMedia({ forcedColors:'active', reducedMotion:'reduce' });
         assert.equal(await page.locator('.today-section').first().evaluate(el=>getComputedStyle(el).backgroundImage), 'none');
@@ -115,7 +124,11 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
     const offline = await browser.newContext();
     const page = await offline.newPage();
     await page.goto(origin);
-    await page.evaluate(() => navigator.serviceWorker.ready);
+    // The application reloads itself on controllerchange; retry this wait across that navigation.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try { await page.evaluate(() => navigator.serviceWorker.ready); break; }
+      catch { await page.waitForTimeout(250); }
+    }
     // The application reloads itself on controllerchange; don't race that navigation.
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
     await page.waitForLoadState('load');
@@ -126,17 +139,17 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
     assert.equal(baked.status(),200); assert.match(baked.headers()['content-type'],/image\/png/);
     await offline.setOffline(true);
     const result = await page.evaluate(async () => {
-      const css = await fetch('/xuan.css?v=3').then(r => r.text());
+      const css = await fetch('/xuan.css?v=4').then(r => r.text());
       const image = new Image(); image.src='/xuan-fibers.svg?v=1'; await image.decode();
       const baked = new Image(); baked.src='/xuan-fibers-mobile.png?v=1'; await baked.decode();
       const optics = await import('/liquid-renderer.js');
-      const touch = await fetch('/touch-material.js?v=2').then(r=>r.text());
-      const app = await fetch('/app.js?v=2.7.0').then(r => r.text());
-      const mobile=await Promise.all(['mobile-ui.css?v=2','mobile-material.css?v=2','mobile-calendar.css?v=1','calendar-surface.css?v=1','appearance-controls.js?v=1'].map(name=>fetch('/'+name).then(r=>r.ok)));
+      const touch = await fetch('/touch-material.js?v=3').then(r=>r.text());
+      const app = await fetch('/app.js?v=2.8.0-frontend1').then(r => r.text());
+      const mobile=await Promise.all(['mobile-ui.css?v=2','mobile-material.css?v=3','mobile-calendar.css?v=1','calendar-surface.css?v=1','appearance-controls.js?v=1'].map(name=>fetch('/'+name).then(r=>r.ok)));
       const fonts=await Promise.all(['xuan-sans','xuan-serif'].map(async name=>{
         const face=new FontFace(name,`url(/${name}.woff2?v=2)`); await face.load(); return face.status;
       }));
-      return { css:css.includes('--xuan-base'), image:image.naturalWidth, baked:baked.naturalWidth, optics:typeof optics.createRenderer, touch:touch.includes('FangcunTouchMaterial'), build:app.includes('20260911-calendar-v3'), mobile, fonts };
+      return { css:css.includes('--xuan-base'), image:image.naturalWidth, baked:baked.naturalWidth, optics:typeof optics.createRenderer, touch:touch.includes('FangcunTouchMaterial'), build:app.includes('20260915-frontend-lab-v1'), mobile, fonts };
     });
     assert.deepEqual(result, { css:true, image:360, baked:720, optics:'function', touch:true, build:true, mobile:[true,true,true,true,true], fonts:['loaded','loaded'] });
     await offline.close();

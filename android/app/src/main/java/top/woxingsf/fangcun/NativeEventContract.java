@@ -1,4 +1,4 @@
-package app.fangcun;
+package top.woxingsf.fangcun;
 
 import java.util.Arrays;
 import java.util.HashSet;

@@ -18,8 +18,18 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
   try {
     browser = await chromium.launch({ headless:true });
     const origin = `http://127.0.0.1:${server.address().port}`;
+    const screenshotDir=process.env.FANGCUN_SCREENSHOT_DIR;
+    async function saveScreenshot(page,name,options={}) {
+      if(!screenshotDir) return;
+      fs.mkdirSync(screenshotDir,{recursive:true});
+      await page.screenshot({path:path.join(screenshotDir,name),...options});
+    }
+    const todayScreens={
+      classic:{light:'01-classic-light-today-1360.png',dark:'02-classic-dark-today-1360.png'},
+      liquid:{light:'03-liquid-light-today-1360.png',dark:'04-liquid-dark-today-1360.png'},
+    };
     for (const width of [1360,390]) {
-      const context = await browser.newContext({ viewport:{ width,height:900 }, serviceWorkers:'block', hasTouch:width<500, isMobile:width<500 });
+      const context = await browser.newContext({ viewport:{ width,height:width<500?844:900 }, serviceWorkers:'block', hasTouch:width<500, isMobile:width<500 });
       const page = await context.newPage();
       const errors=[]; page.on('pageerror',error => errors.push(error.message));
       await page.route('**/api/**',route => {
@@ -36,16 +46,19 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
       async function checkDialog(id) {
         const dialog=page.locator(`#${id}`);
         assert.ok(await dialog.isVisible(),`${id} must open`);
+        const animationBudget=await dialog.evaluate(el=>{
+          // Dialog-level budget: staged child choreography and pointer optics keep their own contracts.
+          const animations=el.getAnimations().filter(animation=>animation.playState==='running');
+          const invalid=animations.flatMap(animation=>animation.effect?.getKeyframes?.()||[]).flatMap(frame=>Object.keys(frame)).filter(property=>!['opacity','transform','offset','computedOffset','composite','easing'].includes(property));
+          return {count:animations.length,invalid};
+        });
+        assert.ok(animationBudget.count<=1,`${id} animation budget: ${animationBudget.count}`);
+        assert.deepEqual(animationBudget.invalid,[],`${id} animation properties`);
         const geometry=await dialog.evaluate(el => {
           const rect=el.getBoundingClientRect();
           return {left:rect.left,right:rect.right,width:innerWidth,overflow:el.scrollWidth-el.clientWidth};
         });
         assert.ok(geometry.left>=-1 && geometry.right<=geometry.width+1 && geometry.overflow<=1,`${id}: ${JSON.stringify(geometry)}`);
-        if(process.env.FANGCUN_SCREENSHOT_DIR) {
-          fs.mkdirSync(process.env.FANGCUN_SCREENSHOT_DIR,{recursive:true});
-          const appearance=await page.evaluate(()=>`${document.documentElement.dataset.skin}-${document.body.classList.contains('dark')?'dark':'light'}`);
-          await page.screenshot({path:path.join(process.env.FANGCUN_SCREENSHOT_DIR,`${id}-${width}-${appearance}.png`)});
-        }
       }
       async function checkSelected(selector) {
         // Sample after the 220ms background transition settles; strictEqual stays strict.
@@ -67,11 +80,55 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         }
       }
       async function checkDynamicFields(selector) {
-        const fields=await page.locator(selector).evaluateAll(elements=>elements.map(el=>el.classList.contains('liquid-select-native')?el.nextElementSibling:el).filter(el=>el.getBoundingClientRect().height).map(el=>{
+        await page.waitForFunction(selector => {
+          const node=document.querySelector(selector);
+          const dialog=node?.closest('dialog');
+          if(!dialog) return true;
+          const optics='.material-light,.liquid-lens,.touch-material-layer';
+          return !dialog.getAnimations({subtree:true}).some(animation=>animation.playState==='running' && !animation.effect?.target?.closest?.(optics));
+        }, selector, {timeout:4000});
+        const fields=await page.locator(selector).evaluateAll(elements=>elements.map(el=>el.classList.contains('liquid-select-native')?el.nextElementSibling:el).filter(el=>el.getBoundingClientRect().height && !['checkbox','radio'].includes(el.type)).map(el=>{
           const style=getComputedStyle(el);return {height:el.getBoundingClientRect().height,radius:style.borderRadius,border:style.borderTopWidth};
         }));
         assert.ok(fields.length,`Missing dynamic fields: ${selector}`);
         assert.ok(fields.every(f=>f.height>=44 && f.radius!=='0px' && f.border==='1px'),JSON.stringify(fields));
+      }
+      async function checkTaskScheduleMatrix() {
+        const matrix={task:['due'],event:['start','end','location'],assignment:['due'],exam:['due'],review:['due']};
+        for(const [type,visible] of Object.entries(matrix)) {
+          await page.locator('#taskType').selectOption(type);
+          const state=await page.locator('#taskForm [data-schedule-group]').evaluateAll(groups=>Object.fromEntries(groups.map(group=>[group.dataset.scheduleGroup,{hidden:group.hidden,aria:group.getAttribute('aria-hidden'),rendered:group.getBoundingClientRect().height>0}])));
+          for(const group of ['start','end','location','due']) {
+            assert.equal(state[group].hidden,!visible.includes(group),`${type}/${group} hidden state`);
+            assert.equal(state[group].aria,visible.includes(group)?null:'true',`${type}/${group} aria-hidden state`);
+            assert.equal(state[group].rendered,visible.includes(group),`${type}/${group} rendered state`);
+          }
+        }
+        await page.locator('#taskType').selectOption('task');
+        await page.locator('#taskDue').fill('2026-09-21');
+        await page.locator('#taskDueTime').fill('10:30');
+        await page.locator('#taskType').selectOption('event');
+        assert.equal(await page.locator('#taskStartDate').inputValue(),'2026-09-21');
+        assert.equal(await page.locator('#taskStartTime').inputValue(),'10:30');
+        assert.equal(await page.locator('#taskEndDate').inputValue(),'2026-09-21');
+        assert.equal(await page.locator('#taskEndTime').inputValue(),'');
+        await page.locator('#taskType').selectOption('task');
+        assert.equal(await page.locator('#taskDue').inputValue(),'2026-09-21');
+        assert.equal(await page.locator('#taskDueTime').inputValue(),'10:30');
+        await page.locator('#taskReminder').selectOption('__custom__');
+        await page.locator('#taskReminderCustom').fill('15');
+        assert.ok(await page.locator('#taskReminderCustomField').isVisible());
+      }
+      function rect(selector) {
+        const node=document.querySelector(selector);
+        if(!node) throw new Error(`Missing rect target: ${selector}`);
+        const box=node.getBoundingClientRect();
+        return {x:box.x,y:box.y,width:box.width,height:box.height};
+      }
+      const taskTypeValues=await page.locator('#taskType option').evaluateAll(options=>options.map(option=>option.value));
+      assert.deepEqual(taskTypeValues,['task','event','assignment','exam','review']);
+      for(const id of ['taskStartDate','taskStartTime','taskEndDate','taskEndTime','taskLocation','taskDue','taskDueTime']) {
+        assert.equal(await page.locator(`#${id}`).count(),1,`Schedule input id must be unique: ${id}`);
       }
       for(const skin of ['classic','liquid']) for(const mode of ['light','dark']) {
         await settings();
@@ -89,16 +146,14 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
           assert.equal(await page.locator('.view.active').count(),1);
           assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1));
         }
+        await page.evaluate(() => document.querySelector('.main-nav [data-view="today"]').click());
+        if(width>500) await saveScreenshot(page,todayScreens[skin][mode]);
         await page.evaluate(() => document.querySelector('[data-view="schedule"]').click());
         await page.evaluate(()=>document.getElementById('currentWeekBtn').click());
         for(const [calendarMode,selected] of [['day','.day-strip button.active'],['year','.mini-days button.today'],['month','.month-day.today > header strong'],['week','.view-switch button.active']]) {
           await page.locator(`[data-schedule-mode=${calendarMode}]`).click();
           await checkSelected(selected);
           await checkSelected('.view-switch button.active');
-          if(process.env.FANGCUN_SCREENSHOT_DIR) {
-            fs.mkdirSync(process.env.FANGCUN_SCREENSHOT_DIR,{recursive:true});
-            await page.screenshot({path:path.join(process.env.FANGCUN_SCREENSHOT_DIR,`calendar-${calendarMode}-${width}-${skin}-${mode}.png`)});
-          }
         }
         if(width>500) {
           const cell=page.locator('.calendar-time-cell').first();
@@ -115,6 +170,7 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         }
         await page.locator('.landscape-schedule-menu summary').click();
         await page.locator('[data-landscape-schedule-action=course]').click();
+        await page.waitForFunction(() => { const dialog=document.getElementById('courseModal'); return Boolean(dialog && dialog.open && !dialog.getAnimations({subtree:true}).length); }, null, {timeout:4000});
         const metrics=await page.evaluate(() => {
           const form=document.getElementById('courseForm');
           const controls=[...form.querySelectorAll('.field input:not([type=checkbox]):not([type=radio]),.field select')];
@@ -124,10 +180,9 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         assert.ok(metrics.every(m=>m.labelGap<40),JSON.stringify(metrics));
         const checkbox=await page.locator('#courseForm input[type=checkbox]').first().boundingBox();
         assert.ok(checkbox.width<=22 && checkbox.height<=22);
-        if(process.env.FANGCUN_SCREENSHOT_DIR) {
-          fs.mkdirSync(process.env.FANGCUN_SCREENSHOT_DIR,{recursive:true});
-          await page.screenshot({path:path.join(process.env.FANGCUN_SCREENSHOT_DIR,`course-${width}-${skin}-${mode}.png`)});
-        }
+        await page.locator('#courseReminder').selectOption('__custom__');
+        await page.locator('#courseReminderCustom').fill('10080');
+        assert.ok(await page.locator('#courseReminderCustomField').isVisible());
         await page.locator('#courseModal .close-button').click();
         // Exercise real open handlers so dynamic settings controls are rendered.
         for(const [trigger,id] of [['openCreateBtn',width<500?'mobileCreateModal':'taskModal'],['addProjectBtn','projectModal'],['semesterSettingsBtn','semesterModal'],['calendarRulesBtn','calendarRulesModal'],['reminderSettingsBtn','remindersModal'],['cloudBtn','cloudModal']]) {
@@ -137,8 +192,35 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
           if(id==='mobileCreateModal') {
             await page.locator('[data-mobile-create=task]').click();
             await checkDialog('taskModal');
+            if(skin==='liquid' && mode==='light') {
+              await page.locator('#taskType').selectOption('task');
+              await saveScreenshot(page,'07-liquid-light-task-390.png');
+              await page.locator('#taskType').selectOption('event');
+              await saveScreenshot(page,'08-liquid-light-event-390.png');
+              await page.locator('#taskType').selectOption('task');
+              await page.locator('#taskReminder').selectOption('__custom__');
+              await page.locator('#taskReminderCustom').fill('15');
+              await saveScreenshot(page,'09-reminder-custom-390.png');
+            }
             await page.locator('#taskModal .close-button').click();
           } else {
+            if(id==='taskModal') {
+              await checkTaskScheduleMatrix();
+              if(skin==='liquid' && mode==='light') {
+                await page.locator('#taskType').selectOption('task');
+                if(width>500) await saveScreenshot(page,'05-liquid-light-task-1360.png');
+                else await saveScreenshot(page,'07-liquid-light-task-390.png');
+                await page.locator('#taskType').selectOption('event');
+                if(width>500) await saveScreenshot(page,'06-liquid-light-event-1360.png');
+                else await saveScreenshot(page,'08-liquid-light-event-390.png');
+                if(width<500) {
+                  await page.locator('#taskType').selectOption('task');
+                  await page.locator('#taskReminder').selectOption('__custom__');
+                  await page.locator('#taskReminderCustom').fill('15');
+                  await saveScreenshot(page,'09-reminder-custom-390.png');
+                }
+              }
+            }
             if(id==='cloudModal') for(const tab of ['account','calendar','files']) {
               await page.locator(`[data-sync-tab=${tab}]`).click();
               assert.ok(await page.locator(`[data-sync-panel=${tab}]`).isVisible());
@@ -159,13 +241,18 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         });
         await checkDialog('smartCaptureModal');
         await checkDynamicFields('.smart-field input,.smart-field select');
+        assert.ok(await page.locator('[data-smart-field=reminderMinutes]').count()>0);
+        assert.ok(await page.locator('[data-smart-field=repeat]').count()>0);
+        assert.ok(await page.locator('[data-smart-field=today]').count()>0);
         const arrowRepeats=await page.locator('.smart-field select').evaluateAll(elements=>elements.map(el=>getComputedStyle(el).backgroundRepeat));
         assert.ok(arrowRepeats.every(value=>value.split(',').every(repeat=>repeat.trim()==='no-repeat')),`Smart selects must not tile their arrow image: ${arrowRepeats.join(';')}`);
         assert.ok(await page.locator('.smart-field select').evaluateAll(elements=>elements.every(el=>getComputedStyle(el).backgroundImage!=='none')),'Smart selects must retain a visible dropdown arrow');
+        if(width>500 && skin==='liquid' && mode==='light') await saveScreenshot(page,'10-smart-two-drafts-1360.png');
         await page.locator('#smartCaptureModal .close-button').click();
       }
       await settings();
       await page.locator('input[name=skin][value=liquid]').check();
+      await page.locator('[name="appearance-theme"][value="light"]').check();
       if(width>500) {
         await page.locator('#appearanceModal .primary-button').hover();
         await page.waitForTimeout(150);
@@ -177,7 +264,9 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         await page.locator('input[name=skin][value=liquid]').check();
       }
       await page.emulateMedia({reducedMotion:'reduce'});
+      assert.deepEqual(await page.evaluate(()=>{const style=getComputedStyle(document.documentElement);return ['--motion-instant','--motion-press','--motion-fast','--motion-popover','--motion-modal','--motion-drawer'].map(name=>style.getPropertyValue(name).trim());}),['0ms','0ms','100ms','0ms','0ms','0ms']);
       await page.locator('#appearanceModal .primary-button').hover();
+      if(width<500) await saveScreenshot(page,'12-liquid-reduced-focus-390.png');
       assert.equal(await page.locator('.liquid-lens').count(),0);
       await page.locator('input[name=skin][value=classic]').check();
       assert.equal(await page.locator('.liquid-lens canvas').count(),0);
@@ -210,7 +299,6 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
     assert.ok(await page.evaluate(()=>getComputedStyle(document.body).overflowY!=='hidden'));
     await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
     assert.ok(await page.evaluate(()=>scrollY>0),'Mobile privacy document must scroll');
-    if(process.env.FANGCUN_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FANGCUN_SCREENSHOT_DIR,'privacy-mobile-liquid.png'),fullPage:true});
     assert.deepEqual(errors,[]);
     await fallback.close();
     const admin=await browser.newContext({serviceWorkers:'block'});

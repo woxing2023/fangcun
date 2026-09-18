@@ -59,6 +59,16 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
       const input=page.locator('#taskTitle');
       await input.waitFor({state:'visible'}); await page.waitForTimeout(250);
       await input.hover(); await page.waitForTimeout(80);
+      await page.waitForTimeout(220);
+      const interaction = await page.evaluate(() => ({
+        lens:document.querySelectorAll('.liquid-lens').length,
+        canvas:document.querySelectorAll('.liquid-lens canvas').length,
+        light:document.querySelectorAll('.material-light').length,
+        caustic:document.querySelectorAll('.liquid-caustic').length,
+        wave:document.querySelectorAll('.liquid-wave').length,
+        trail:document.querySelectorAll('.liquid-trail').length,
+      }));
+      assert.deepEqual(interaction, skin==='liquid' ? {lens:1,canvas:1,light:0,caustic:0,wave:0,trail:0} : {lens:0,canvas:0,light:1,caustic:0,wave:0,trail:0}, 'Desktop interaction must use one active optical layer');
       await page.evaluate(() => {window.__lens=document.querySelector('#taskModal .liquid-lens');});
       const before=await page.locator('#taskModal').boundingBox();
       await page.waitForTimeout(1300);
@@ -78,6 +88,7 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
         await trigger.click();
         const option=page.locator('.liquid-select-menu:visible [role=option]').last();
         await option.click();
+        await page.waitForFunction(() => [...document.querySelectorAll('.liquid-select-menu')].every(menu => menu.hidden || menu.getBoundingClientRect().width === 0), null, {timeout:2000});
         assert.equal(await page.locator('.liquid-select-menu:visible').count(),0,'Select click must commit and close');
       } else await page.locator('#taskModal select').first().selectOption({index:0});
       if (process.env.FANGCUN_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.FANGCUN_SCREENSHOT_DIR,`dialog-${skin}-${mode}.png`)});

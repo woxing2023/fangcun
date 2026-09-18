@@ -74,7 +74,7 @@
     border-top-color:var(--cal-rim) !important; border-left:4px solid var(--cal-color) !important; border-radius:10px !important;
     box-shadow:inset 0 1px 0 var(--cal-rim),inset 0 -1px 0 rgba(27,47,76,.09),var(--cal-shadow) !important;
     backdrop-filter:none !important; -webkit-backdrop-filter:none !important; filter:none !important;
-    text-shadow:none !important; transform:none !important; transition:border-color 120ms ease !important;
+    text-shadow:none !important; transform:none !important; transition:border-color var(--motion-press) var(--ease-fluid) !important;
     text-align:left !important; isolation:isolate;
   }
   html body.dark #scheduleView :is(.course-block,.calendar-week-event,.calendar-list-item,.day-course-card,.agenda-course) {

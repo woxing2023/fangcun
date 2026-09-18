@@ -148,9 +148,13 @@ def main():
                             issue(name, 'unexpected_raster_image')
                     elif suffix == '.woff2':
                         row['kind'] = 'font'; row['checks'] += inspect_font(name, blob)
-                    elif suffix == '.jar':
+                    elif suffix in ('.jar', '.aar'):
                         row['kind'] = 'vendor_jar'; row['checks'] += inspect_jar(name, blob)
-                        if name != 'android/gradle/wrapper/gradle-wrapper.jar':
+                        # Only the pinned Gradle wrapper JAR and the reviewed XMS wearable SDK
+                        # AAR (vendored with PR2 c8331ce; pattern-scanned clean 2026-09-16) may ship.
+                        allowed_vendor = ('android/gradle/wrapper/gradle-wrapper.jar',
+                                          'android/app/libs/xms-wearable-lib_1.4_release.aar')
+                        if name not in allowed_vendor:
                             issue(name, 'unexpected_jar')
                     else:
                         row['kind'] = 'text'

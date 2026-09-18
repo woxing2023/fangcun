@@ -5,7 +5,8 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const forced = matchMedia('(forced-colors: active)');
   const compact = matchMedia('(max-width: 900px), (pointer: coarse), (hover: none)');
-  const enabled = () => document.documentElement.dataset.materialPerformance !== 'touch'
+  const enabled = () => document.documentElement.dataset.skin !== 'liquid'
+    && document.documentElement.dataset.materialPerformance !== 'touch'
     && !compact.matches && !reduced.matches && !forced.matches && !document.hidden
     && typeof window.FangcunNative?.syncReminders !== 'function'
     && !/Android/i.test(navigator.userAgent || '');
@@ -46,7 +47,7 @@
       // Only the light deforms. The control's text and hit area stay fixed.
       active.ripple=active.node.animate([
         {opacity:.35,scale:'.96 .90'}, {opacity:1,scale:'1.01 1.02',offset:.36}, {opacity:.8,scale:'1'}
-      ],{duration:650,easing:'cubic-bezier(.22,1,.36,1)'});
+      ],{duration:120,easing:'cubic-bezier(.23,1,.32,1)'});
     }
     clearTimeout(timer); timer=setTimeout(clear,press ? 950 : 1400);
   }
@@ -57,8 +58,7 @@
   },{passive:true});
   document.addEventListener('pointerdown',event=>paint(event,true),{passive:true});
   document.addEventListener('keydown',event=>{
-    if(event.key==='Enter' || event.key===' ') paint({target:event.target},true);
-    else if(event.key==='Escape' || event.key==='Tab') clear();
+    if(event.key==='Escape' || event.key==='Tab') clear();
   });
   document.addEventListener('scroll',clear,{capture:true,passive:true});
   document.addEventListener('pointerout',event=>{if(!event.relatedTarget)clear()},{passive:true});

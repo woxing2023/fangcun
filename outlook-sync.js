@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { semesterCourseOccurrences } = require("./calendar-occurrences");
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 const SCOPES = "openid profile offline_access User.Read Calendars.ReadWrite";
@@ -77,31 +78,23 @@ function taskLocalEvent(task) {
   };
 }
 
+// 课程实例 → 本地事件：与网页端逐日扫描口径一致（含补课日重放与被挪入的实例），
+// 语义由 calendar-occurrences.js 统一提供（与 app.js courseOccurrence() 对照守护）。
 function courseLocalEvents(document) {
-  const courses = Array.isArray(document.courses) ? document.courses : [];
   const slots = Array.isArray(document.timeSlots) ? document.timeSlots : [];
-  const exceptions = Array.isArray(document.courseExceptions) ? document.courseExceptions : [];
-  const rules = Array.isArray(document.calendarRules) ? document.calendarRules : [];
-  const semesterStart = document.semester?.startDate;
-  if (!semesterStart) return [];
   const slot = (number) => slots.find((item) => Number(item.number) === Number(number));
-  return courses.flatMap((course) => (course.weeks || []).map((week) => {
-    const originalDate = addDays(semesterStart, (Number(week) - 1) * 7 + Number(course.day || 1) - 1);
-    const exception = exceptions.find((item) => item.courseId === course.id && item.date === originalDate);
-    if (exception?.type === "cancel") return null;
-    const date = exception?.type === "reschedule" ? (exception.targetDate || (exception.day ? addDays(semesterStart, (Number(week) - 1) * 7 + Number(exception.day) - 1) : originalDate)) : originalDate;
-    if (rules.find((item) => item.date === date)?.type === "holiday") return null;
-    const start = slot(exception?.type === "reschedule" ? exception.startSection : course.startSection);
-    const end = slot(exception?.type === "reschedule" ? exception.endSection : course.endSection);
-    if (!start || !end) return null;
-    return {
-      localKey: `course:${course.id}:${originalDate}`, kind: "course", sourceId: course.id, occurrenceDate: originalDate,
-      title: exception?.name || course.name || "课程", description: [course.code, course.teacher, course.notes].filter(Boolean).join(" · "),
-      location: exception?.location || [course.campus, course.location].filter(Boolean).join(" · "), date, time: start.startTime,
-      endDate: date, endTime: end.endTime, allDay: false, reminderMinutes: Number(course.reminderMinutes ?? -1),
-      updatedAt: Number(exception?.updatedAt || course.updatedAt || course.createdAt || 0),
-    };
-  }).filter(Boolean));
+  return semesterCourseOccurrences(document).flatMap(({ course, occurrence, dateKey, keyDate, record }) => {
+    const start = slot(occurrence.startSection);
+    const end = slot(occurrence.endSection);
+    if (!start || !end) return [];
+    return [{
+      localKey: `course:${course.id}:${keyDate}`, kind: "course", sourceId: course.id, occurrenceDate: keyDate,
+      title: record?.name || course.name || "课程", description: [course.code, course.teacher, course.notes].filter(Boolean).join(" · "),
+      location: record?.location || [course.campus, course.location].filter(Boolean).join(" · "), date: dateKey, time: start.startTime,
+      endDate: dateKey, endTime: end.endTime, allDay: false, reminderMinutes: Number(course.reminderMinutes ?? -1),
+      updatedAt: Number(record?.updatedAt || course.updatedAt || course.createdAt || 0),
+    }];
+  });
 }
 
 function localEvents(document) {

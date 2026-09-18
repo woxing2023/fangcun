@@ -94,7 +94,7 @@ async function checkDialogsAndMenus(page, touch) {
         data.courses = Array.from({length:42}, (_, i) => ({ id:'qa-course-' + i,
           name:['计算机和程序设计基础ALab 2 - Python as a Calculator','大学物理实验','微积分与线性代数','英语写作'][i % 4],
           day:i % 7 + 1, startSection:Math.floor(i / 7) * 2 + 1, endSection:Math.min(13, Math.floor(i / 7) * 2 + 2),
-          weeks:Array.from({length:20}, (_, j) => j + 1), location:'B12-205', color:COURSE_PALETTE[i % COURSE_PALETTE.length], colorAuto:false }));
+          weeks:Array.from({length:20}, (_, j) => j + 1), location:'E13-205', color:COURSE_PALETTE[i % COURSE_PALETTE.length], colorAuto:false }));
         data.tasks = Array.from({length:180}, (_, i) => ({ id:'qa-task-' + i,
           title:'计算机和程序设计基础A新作业：Lab 2 - Python as a Calculator ' + i, notes:'', due:localISO(addDays(new Date(), i % 7)), dueTime:'23:59',
           startDate:'', important:true, urgent:i % 2 === 0, quadrant:i % 2 === 0 ? 'q1' : 'q2', completed:false, type:'task', repeat:'none', createdAt:Date.now() }));
@@ -124,7 +124,8 @@ async function checkDialogsAndMenus(page, touch) {
             if(mode!=='week')assert.ok(metrics.denseShadow>0, 'Glass bevels must remain on dense records');
             assert.equal(metrics.visibleWillChange, 0, 'Resting surfaces must not be permanently promoted');
             assert.match(metrics.board.image, /xuan|svg/, 'The shared paper substrate must remain');
-            if (mode === 'week') { assert.equal(metrics.cell.image, 'none'); assert.equal(metrics.cell.transition, '0s'); }
+            // Week view: tracks are ruled by the shared --cal-grid gradient (calendar architecture); never a texture image.
+            if (mode === 'week') { assert.match(metrics.cell.image, /^repeating-linear-gradient\(/, 'Week tracks draw the shared slot rules'); assert.doesNotMatch(metrics.cell.image, /url\(/, 'Week tracks must not add a texture image'); assert.equal(metrics.cell.transition, '0s'); }
             if (mode === 'timetable') { assert.match(metrics.course.image, /gradient/); assert.equal(metrics.courseColors.length, 8, 'Saved course colors remain distinct'); }
             if (mode === 'list') { assert.equal(metrics.listItem.animation, 'none'); assert.match(metrics.listItem.image, /gradient/); assert.equal(metrics.listCourseColors.length, 8, 'Readable list preserves course colors'); }
           }
@@ -137,8 +138,8 @@ async function checkDialogsAndMenus(page, touch) {
       const opticalRect=await opticalTarget.boundingBox();
       await opticalTarget.dispatchEvent('pointerdown', {pointerType:touch ? 'touch' : 'mouse',pointerId:1,isPrimary:true,clientX:opticalRect.x+opticalRect.width/2,clientY:opticalRect.y+opticalRect.height/2});
       await page.waitForTimeout(100);
-      const interaction = {lens:await page.locator('.liquid-lens').count(), light:await page.locator('.material-light').count(), canvas:await page.locator('canvas').count()};
-      assert.deepEqual(interaction, touch || android ? {lens:0,light:0,canvas:1} : {lens:1,light:1,canvas:1});
+      const interaction = {lens:await page.locator('.liquid-lens').count(), light:await page.locator('.material-light').count(), canvas:await page.locator('canvas').count(), caustic:await page.locator('.liquid-caustic').count(), wave:await page.locator('.liquid-wave').count(), trail:await page.locator('.liquid-trail').count()};
+      assert.deepEqual(interaction, touch || android ? {lens:0,light:0,canvas:1,caustic:0,wave:0,trail:0} : {lens:1,light:0,canvas:1,caustic:0,wave:0,trail:0});
       assert.deepEqual(errors, []);
       await page.evaluate(() => {Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
       assert.equal(await page.locator('.liquid-lens,.material-light,canvas').count(), 0, 'Visibility change releases decorations and WebGL surface');
@@ -154,7 +155,7 @@ async function checkDialogsAndMenus(page, touch) {
     fs.mkdirSync(path.dirname(output), {recursive:true});
     fs.writeFileSync(output, JSON.stringify({ testedAt:new Date().toISOString(), browser:'Chromium',
       fixture:{courses:42,tasks:180}, limitation:'Synthetic browser and simulated native bridge; not real-device FPS or APK validation.', results }, null, 2));
-    console.log('Mobile materials: 48 paper/glass view/theme cases with touch optics enabled, desktop effects, course list colors, modal/menu visibility and resource cleanup passed.');
+    console.log('Mobile materials: 64 paper/glass view/theme cases with touch optics enabled, desktop effects, course list colors, modal/menu visibility and resource cleanup passed.');
     console.log(path.relative(root, output));
   } finally {
     await browser?.close(); await new Promise(resolve => server.close(resolve));

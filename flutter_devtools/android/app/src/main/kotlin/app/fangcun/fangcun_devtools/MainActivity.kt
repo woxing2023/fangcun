@@ -1,4 +1,4 @@
-package app.fangcun.fangcun_devtools
+package top.woxingsf.fangcun.fangcun_devtools
 
 import android.Manifest
 import android.app.Notification

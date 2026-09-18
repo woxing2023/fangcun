@@ -77,27 +77,29 @@
       if (/(auto|scroll|hidden|clip)/.test(s.overflowX)) {clip.left=Math.max(clip.left,r.left);clip.right=Math.min(clip.right,r.right);}
       if (/(auto|scroll|hidden|clip)/.test(s.overflowY)) {clip.top=Math.max(clip.top,r.top);clip.bottom=Math.min(clip.bottom,r.bottom);}
     }
-    return {rect,clip,radius:parseFloat(style.borderTopLeftRadius)||0};
+    const tint=style.getPropertyValue('--liquid-glass-tint').trim().split(/\s+/).map(value=>Number(value)/255).filter(Number.isFinite);
+    return {rect,clip,radius:parseFloat(style.borderTopLeftRadius)||0,tint:tint.length===3?tint:undefined};
   }
   function fallback(state, pulse=true) {
-    glow.style.opacity = state.kind==='paper' ? '.65' : '1';
+    glow.style.opacity = state.kind==='paper' ? '.12' : '.28';
     glow.style.transform=`translate3d(${state.x*state.rect.width-90}px,${state.y*state.rect.height-90}px,0)`;
     if (!pulse) return;
     fallbackAnimation?.cancel();
     const x=state.x*state.rect.width-50,y=state.y*state.rect.height-50;
+    const opacity=state.kind==='paper' ? .12 : .28;
     fallbackAnimation=ring.animate([
-      {transform:`translate(${x}px,${y}px) scale(.12)`,opacity:state.kind==='paper' ? .12 : .7},
-      {transform:`translate(${x}px,${y}px) scale(3)`,opacity:0}
-    ],{duration:900,easing:'cubic-bezier(.16,.6,.3,1)',fill:'forwards'});
+      {transform:`translate(${x}px,${y}px) scale(.85)`,opacity},
+      {transform:`translate(${x}px,${y}px) scale(1.35)`,opacity:0}
+    ],{duration:160,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
   }
   function mountRenderer(state, gpu) {
     if (!gpu || active!==state || !enabled()) return;
     const health=gpu.getStats?.();
     if (health?.lost || health?.disposed) {state.gpu=false; fallback(state);return;}
     try {
-      gpu.mount(shadow,state.rect,{kind:state.kind,dark:root.dataset.mode==='dark',radius:state.radius});
-      gpu.move(state.x,state.y); gpu.pulse(state.x,state.y,1);
-      state.gpu=true; glow.style.opacity='0'; fallbackAnimation?.cancel();
+      gpu.mount(shadow,state.rect,{kind:state.kind,dark:root.dataset.mode==='dark',radius:state.radius,tint:state.tint});
+      gpu.move(state.x,state.y); gpu.pulse(state.x,state.y,"ripple");
+      state.gpu=true; glow.style.opacity='0'; ring.style.opacity='0'; fallbackAnimation?.cancel();
     } catch {state.gpu=false; fallback(state);}
   }
   function begin(event) {
@@ -109,8 +111,8 @@
     const measured=geometry(chosen.element);
     if (!measured) return;
     clear(); counts.gestures++;
-    const {rect,clip,radius}=measured;
-    active={target:chosen.element,kind:chosen.kind,rect,radius,pointer:event.pointerId,x:clamp((event.clientX-rect.left)/rect.width,0,1),y:clamp((event.clientY-rect.top)/rect.height,0,1),gpu:false,released:false};
+    const {rect,clip,radius,tint}=measured;
+    active={target:chosen.element,kind:chosen.kind,rect,radius,tint,pointer:event.pointerId,x:clamp((event.clientX-rect.left)/rect.width,0,1),y:clamp((event.clientY-rect.top)/rect.height,0,1),gpu:false,released:false};
     layer.style.width=rect.width+'px'; layer.style.height=rect.height+'px';
     layer.style.borderRadius=radius+'px';
     // Options rendered in a popover must keep their optics in the same top
@@ -155,8 +157,8 @@
     if (latest) {cancelAnimationFrame(updateFrame);flush();}
     active.released=true;
     clearTimeout(releaseTimer);
-    releaseAnimation=layer.animate([{opacity:1,offset:0},{opacity:1,offset:.25},{opacity:0}],{duration:1100,easing:'ease-out'});
-    releaseTimer=setTimeout(clear,1110);
+    releaseAnimation=layer.animate([{opacity:1,offset:0},{opacity:1,offset:.25},{opacity:0}],{duration:160,easing:'cubic-bezier(.22,1,.36,1)'});
+    releaseTimer=setTimeout(clear,170);
   }
   document.addEventListener('pointerdown',begin,{passive:true});
   document.addEventListener('pointermove',move,{passive:true});

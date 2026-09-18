@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 const { OutlookIntegration } = require("./outlook-sync");
 const { GoogleIntegration } = require("./google-sync");
+const { semesterCourseOccurrences, dayNumber } = require("./calendar-occurrences");
 const { SCHEMA: LINK_SCHEMA, VERSION: LINK_VERSION, buildSnapshot } = require("./link-contract");
 
 const APP_VERSION = "2.8.0";
@@ -408,29 +409,21 @@ function calendarAlarm(lines, minutes, label) {
 }
 
 function buildCalendar(document, ownerName = "方寸") {
-  const courses = Array.isArray(document?.courses) ? document.courses : [];
   const tasks = Array.isArray(document?.tasks) ? document.tasks : [];
   const timeSlots = Array.isArray(document?.timeSlots) ? document.timeSlots : [];
-  const exceptions = Array.isArray(document?.courseExceptions) ? document.courseExceptions : [];
   const semesterStart = document?.semester?.startDate;
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Fangcun//Calendar Subscription//ZH", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-TIMEZONE:Asia/Shanghai", `X-WR-CALNAME:${icsEscape(`方寸 · ${ownerName}`)}`];
   const slot = (number) => timeSlots.find((item) => Number(item.number) === Number(number));
 
-  if (semesterStart) courses.forEach((course) => {
-    (Array.isArray(course.weeks) ? course.weeks : []).forEach((week) => {
-      const originalDate = addDateDays(semesterStart, (Number(week) - 1) * 7 + Number(course.day || 1) - 1);
-      const exception = exceptions.find((item) => item.courseId === course.id && item.date === originalDate);
-      if (!originalDate || exception?.type === "cancel") return;
-      const eventDate = exception?.type === "reschedule" && exception.day ? addDateDays(semesterStart, (Number(week) - 1) * 7 + Number(exception.day) - 1) : originalDate;
-      const startSlot = slot(exception?.type === "reschedule" ? exception.startSection : course.startSection);
-      const endSlot = slot(exception?.type === "reschedule" ? exception.endSection : course.endSection);
-      if (!startSlot || !endSlot) return;
-      const title = String(course.name || "课程");
-      lines.push("BEGIN:VEVENT", `UID:course-${icsEscape(course.id || crypto.randomUUID())}-${week}@fangcun`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Asia/Shanghai:${compactDateTime(eventDate, startSlot.startTime)}`, `DTEND;TZID=Asia/Shanghai:${compactDateTime(eventDate, endSlot.endTime)}`, `SUMMARY:${icsEscape(title)}`, `LOCATION:${icsEscape([course.campus, course.location].filter(Boolean).join(" · "))}`, `DESCRIPTION:${icsEscape([course.code, course.teacher, course.notes].filter(Boolean).join(" · "))}`);
-      calendarAlarm(lines, course.reminderMinutes, `${title} 即将开始`);
-      lines.push("END:VEVENT");
-    });
+  if (semesterStart) semesterCourseOccurrences(document).forEach(({ course, occurrence, dateKey, keyDate, record }) => {
+    const startSlot = slot(occurrence.startSection);
+    const endSlot = slot(occurrence.endSection);
+    if (!startSlot || !endSlot) return;
+    const title = String(record?.name || course.name || "课程");
+    lines.push("BEGIN:VEVENT", `UID:course-${icsEscape(course.id || crypto.randomUUID())}-${keyDate}@fangcun`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Asia/Shanghai:${compactDateTime(dateKey, startSlot.startTime)}`, `DTEND;TZID=Asia/Shanghai:${compactDateTime(dateKey, endSlot.endTime)}`, `SUMMARY:${icsEscape(title)}`, `LOCATION:${icsEscape([course.campus, course.location].filter(Boolean).join(" · "))}`, `DESCRIPTION:${icsEscape([course.code, course.teacher, course.notes].filter(Boolean).join(" · "))}`);
+    calendarAlarm(lines, course.reminderMinutes, `${title} 即将开始`);
+    lines.push("END:VEVENT");
   });
 
   tasks.filter((task) => !task.completed).forEach((task) => {
@@ -496,6 +489,12 @@ function validAgentDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+function agentOccurrenceRange(from, to) {
+  if (!validAgentDate(from) || !validAgentDate(to)) throw agentError(400, "from/to 需要是有效的 YYYY-MM-DD 日期");
+  const days = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000) + 1;
+  if (days < 1 || days > 92) throw agentError(400, "课程实例日期范围必须是闭区间且不超过 92 天");
+  return { from, to };
 }
 function agentOwner(request) {
   const match = String(request.headers.authorization || "").match(/^Bearer ([A-Za-z0-9_-]{43})$/i);
@@ -650,6 +649,7 @@ async function handleAgentBusiness(request, response, url) {
     : request.method === "GET" && url.pathname === "/api/agent/data" ? "data.read"
       : request.method === "PUT" && url.pathname === "/api/agent/data" ? "data.update"
         : request.method === "GET" && url.pathname === "/api/agent/schedule" ? "schedule.read"
+    : request.method === "GET" && url.pathname === "/api/agent/occurrences" ? "occurrences.read"
     : request.method === "POST" && url.pathname === "/api/agent/tasks" ? "tasks.create"
       : request.method === "PATCH" && taskMatch ? "tasks.update"
         : request.method === "POST" && url.pathname === "/api/agent/projects" ? "projects.create"
@@ -664,10 +664,11 @@ async function handleAgentBusiness(request, response, url) {
     statements.touchAgentToken.run(Date.now(), owner.token_hash);
     if (!originAllowed(request)) return send(403, { error: "请求来源不受信任" });
     if (action === "capabilities.read") {
-      return send(200, { apiVersion: "2.9.0", capabilities: [
+      return send(200, { apiVersion: "2.10.0", capabilities: [
         { name: "data.read", method: "GET", path: "/api/agent/data", description: "读取完整方寸数据文档" },
         { name: "data.update", method: "PUT", path: "/api/agent/data", description: "原子替换完整数据文档，使用 expectedRevision 防止覆盖并发修改" },
         { name: "schedule.read", method: "GET", path: "/api/agent/schedule", description: "读取课表、项目与任务" },
+        { name: "occurrences.read", method: "GET", path: "/api/agent/occurrences?from=:from&to=:to", description: "读取已求值课程实例" },
         { name: "tasks.create", method: "POST", path: "/api/agent/tasks", description: "创建任务" },
         { name: "tasks.update", method: "PATCH", path: "/api/agent/tasks/:id", description: "编辑、完成或恢复任务" },
         { name: "projects.create", method: "POST", path: "/api/agent/projects", description: "创建长期项目" },
@@ -688,6 +689,43 @@ async function handleAgentBusiness(request, response, url) {
     if (action === "schedule.read") {
       const { row, document } = agentDocument(owner.user_id);
       return send(200, { tasks: document.tasks, projects: document.projects, courses: document.courses, semester: document.semester || {}, timeSlots: document.timeSlots, courseExceptions: document.courseExceptions, calendarRules: document.calendarRules || [], revision: row?.revision || 0, updatedAt: row?.updatedAt || null });
+    }
+    if (action === "occurrences.read") {
+      const { from, to } = agentOccurrenceRange(url.searchParams.get("from"), url.searchParams.get("to"));
+      const { row, document } = agentDocument(owner.user_id);
+      const timeSlot = (section) => document.timeSlots.find((slot) => Number(slot.number) === Number(section)) || null;
+      const occurrences = semesterCourseOccurrences(document)
+        .filter(({ dateKey }) => dateKey >= from && dateKey <= to)
+        .map(({ course, occurrence, dateKey, keyDate, record }) => {
+          const startSlot = timeSlot(occurrence.startSection);
+          const endSlot = timeSlot(occurrence.endSection);
+          const calendarRule = (document.calendarRules || []).find((rule) => rule.date === dateKey && rule.type === "teaching");
+          const reminderMinutes = Number.isFinite(Number(course.reminderMinutes)) ? Number(course.reminderMinutes) : null;
+          return {
+            id: `course:${course.id}:${keyDate}`,
+            courseId: course.id,
+            name: record?.name || course.name || "课程",
+            code: String(course.code || ""),
+            teacher: String(course.teacher || ""),
+            campus: String(course.campus || ""),
+            location: String(course.location || ""),
+            notes: String(course.notes || ""),
+            date: dateKey,
+            keyDate,
+            day: dayNumber(dateKey),
+            startSection: occurrence.startSection,
+            endSection: occurrence.endSection,
+            startTime: startSlot?.startTime || null,
+            endTime: endSlot?.endTime || null,
+            occurrenceChanged: Boolean(occurrence.occurrenceChanged),
+            changeType: record?.type || (calendarRule ? "teaching" : "none"),
+            isTeachingDay: Boolean(calendarRule),
+            teachingUseDay: calendarRule ? Number(calendarRule.useDay) : null,
+            reminderMinutes,
+            quality: startSlot && endSlot ? "ok" : "missing_time_slot",
+          };
+        });
+      return send(200, { apiVersion: "2.10.0", timeZone: "Asia/Shanghai", from, to, revision: row?.revision || 0, updatedAt: row?.updatedAt || null, occurrences }, { "Cache-Control": "private, no-store" });
     }
     if (action === "tasks.create" || action === "tasks.update" || action === "projects.create" || action === "projects.update") {
       const body = await readJson(request, agentMaxBodyBytes);
@@ -730,7 +768,7 @@ async function handleAgentBusiness(request, response, url) {
       const saved = persistExternalDocument(owner.user_id, document);
       return send(existing ? 200 : 201, { task, ...saved });
     }
-    if (url.pathname === "/api/agent/schedule" || url.pathname === "/api/agent/tasks" || taskMatch || projectRoute) return send(405, { error: "Agent API 不支持此操作" }, { Allow: projectRoute ? (projectMatch ? "PATCH" : "POST") : taskMatch ? "PATCH" : url.pathname.endsWith("schedule") ? "GET" : "POST" });
+    if (url.pathname === "/api/agent/schedule" || url.pathname === "/api/agent/occurrences" || url.pathname === "/api/agent/tasks" || taskMatch || projectRoute) return send(405, { error: "Agent API 不支持此操作" }, { Allow: projectRoute ? (projectMatch ? "PATCH" : "POST") : taskMatch ? "PATCH" : url.pathname.endsWith("schedule") || url.pathname.endsWith("occurrences") ? "GET" : "POST" });
     return send(404, { error: "接口不存在" });
   } catch (error) {
     // Do not log request data or raw exceptions from agent requests.

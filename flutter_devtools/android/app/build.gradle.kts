@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "app.fangcun.fangcun_devtools"
+    namespace = "top.woxingsf.fangcun.fangcun_devtools"
     compileSdk = flutter.compileSdkVersion
     // This scaffold currently has no native C/C++ plugin. Leaving NDK
     // selection to AGP avoids forcing a local NDK download for the console.
@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "app.fangcun.fangcun_devtools"
+        applicationId = "top.woxingsf.fangcun.fangcun_devtools"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

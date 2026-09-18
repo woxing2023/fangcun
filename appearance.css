@@ -3,9 +3,23 @@
 /* Shared component contract. Layout and business state stay in the existing sheets.
    New skins override tokens; do not duplicate pages or event handlers. */
 :root {
+  /* Shared semantic roles: skins provide the final values below. */
+  --bg:#f4f2ed; --surface:#fffefb; --card:#f7f5f0; --ink:#29322f; --muted:#68706d;
+  --accent:#536575; --accent-soft:rgba(83,101,117,.16); --line:rgba(83,101,117,.24);
+  --q1:#a84c59; --q2:#927039; --q3:#456f9f; --q4:#7b638e;
+  --q1-soft:#f3e3e5; --q2-soft:#f0e8d9; --q3-soft:#e0eaf4; --q4-soft:#eae3f0;
   --control-height:44px;
   --control-radius:10px;
+  --motion-instant:100ms;
+  --motion-press:120ms;
+  --motion-fast:160ms;
+  --motion-popover:200ms;
+  --motion-modal:250ms;
+  --motion-drawer:250ms;
   --ease-fluid:cubic-bezier(.22,1,.36,1);
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --ease-in-out:cubic-bezier(.77,0,.175,1);
+  --ease-drawer:cubic-bezier(.32,.72,0,1);
   --action-fill:#afaeac;
   --action-ink:#3e4142;
   --chrome:var(--surface);
@@ -14,6 +28,16 @@
   --material-blur:none;
   --paper-shadow:var(--shadow);
   --glass-rim:rgba(255,255,255,.65);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-instant:0ms;
+    --motion-press:0ms;
+    --motion-fast:100ms;
+    --motion-popover:0ms;
+    --motion-modal:0ms;
+    --motion-drawer:0ms;
+  }
 }
 /* Refined classic light surfaces; keep other skins and dark mode independent. */
 html:not([data-skin="liquid"]) body:not(.dark) {
@@ -57,7 +81,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 input:not(:where(#scheduleView,#scheduleView *))::placeholder, textarea:not(:where(#scheduleView,#scheduleView *))::placeholder { color:var(--muted); opacity:.85; }
 button:disabled { cursor:not-allowed; }
-button:disabled:not(:where(#scheduleView,#scheduleView *)) { opacity:.5; }
+button:disabled:not(:where(#scheduleView,#scheduleView *)) { opacity:.45; }
 .close-button { min-width:40px; min-height:40px; }
 /* Keep filled actions readable in either mode, independently of link/accent ink. */
 .primary-button:not(:where(#scheduleView,#scheduleView *)), .quick-submit:not(:where(#scheduleView,#scheduleView *)), .nav-item.active:not(:where(#scheduleView,#scheduleView *)), .segmented button.selected:not(:where(#scheduleView,#scheduleView *)),
@@ -83,19 +107,19 @@ body.admin-mode .sidebar-actions > :not(#appearanceSettingsBtn) { display:none; 
 /* A temporary, non-interactive lens lives inside the active surface (including top-layer dialogs). */
 .liquid-lens { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; border-radius:inherit; }
 .liquid-lens * { pointer-events:none; }
-.liquid-caustic { position:absolute; inset:0; background:radial-gradient(100px 65px at var(--water-x,50%) var(--water-y,20%),rgba(255,255,255,.24),transparent 80%); }
-.liquid-wave,.liquid-trail { position:absolute; width:20px; height:20px; border:1px solid rgba(235,248,255,.65); border-radius:50%; box-shadow:0 0 10px rgba(215,235,243,.22),inset 0 0 6px rgba(255,255,255,.18); transform:translate(-50%,-50%); }
-.liquid-wave { backdrop-filter:blur(1px); }
-.liquid-trail { background:rgba(228,245,252,.15); filter:blur(3px); border:0; }
 @media (prefers-reduced-motion:reduce) {
-  *,*::before,*::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+  *,*::before,*::after { animation:none !important; scroll-behavior:auto !important; }
+  html body :where(.modal,.liquid-select-menu,.sidebar,.sidebar-backdrop) { transition:none !important; }
   .liquid-lens { display:none; }
 }
 @media (forced-colors:active) {
-  .liquid-lens,.skin-preview { display:none; } .skin-option:has(:checked) { outline:2px solid Highlight; }
+  .liquid-lens,.skin-preview { display:none; }
+  .skin-option:has(:checked) { outline:2px solid Highlight; }
+  html body :is(button,input,textarea,select,summary,a[href],[role="button"]) { forced-color-adjust:auto; }
   .field select:not(:where(#scheduleView,#scheduleView *)), select:not(:where(#scheduleView,#scheduleView *)) { appearance:auto; background-image:none; }
 }
 @media (max-width:720px) { .field input:not([type="checkbox"]):not([type="radio"]),.field select,.field textarea { font-size:16px; } }
+@media (prefers-reduced-motion:reduce) { html body .state-spinner { animation:none; } }
 /* These selected states also repair classic dark mode. */
 html body :is(.primary-button,.quick-submit,.mobile-smart-submit,.today-progress,.today-aside,
   .nav-item.active,.view-switch button.active,.segmented button.selected,.auth-tabs button.active,
@@ -133,10 +157,17 @@ input[type="file"]::file-selector-button {
 input[type="file"]:not(:where(#scheduleView,#scheduleView *))::file-selector-button { border:1px solid var(--line); border-radius:var(--control-radius);
   background:var(--chrome); color:var(--accent); box-shadow:var(--material-shadow); }
 input:disabled,select:disabled,textarea:disabled { cursor:not-allowed; }
-input:disabled:not(:where(#scheduleView,#scheduleView *)),select:disabled:not(:where(#scheduleView,#scheduleView *)),textarea:disabled:not(:where(#scheduleView,#scheduleView *)) { opacity:.6; }
+input:disabled:not(:where(#scheduleView,#scheduleView *)),select:disabled:not(:where(#scheduleView,#scheduleView *)),textarea:disabled:not(:where(#scheduleView,#scheduleView *)) { opacity:.45; }
 input[readonly]:not(:where(#scheduleView,#scheduleView *)),textarea[readonly]:not(:where(#scheduleView,#scheduleView *)) { background-color:var(--surface); }
 input[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),textarea[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),select[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),
 input:user-invalid:not(:where(#scheduleView,#scheduleView *)),textarea:user-invalid:not(:where(#scheduleView,#scheduleView *)),select:user-invalid:not(:where(#scheduleView,#scheduleView *)) { border-color:var(--q1); }
+html body :is(input,textarea,select)[aria-invalid="true"]:not(:where(#scheduleView,#scheduleView *)),html body :is(input,textarea,select):user-invalid:not(:where(#scheduleView,#scheduleView *)) { border-color:var(--q1) !important; background-color:var(--q1-soft) !important; }
+html body :is(.field,.smart-field):has([aria-invalid="true"]) > .field-hint:not(.hidden),html body .field-error:not(.hidden),html body [data-field-error]:not(.hidden) { display:block; color:var(--q1); }
+html body :is([aria-busy="true"],[data-loading="true"]) { pointer-events:none; }
+html body :is([aria-busy="true"],[data-loading="true"]) .liquid-lens { display:none !important; }
+html body .state-spinner { display:inline-block; width:1em; height:1em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:state-spinner .7s linear infinite; vertical-align:-.15em; }
+html body .empty-state { min-height:44px; display:grid; place-items:center; }
+@keyframes state-spinner { to { transform:rotate(360deg); } }
 html body :is(.field,.smart-field):focus-within > span:first-child:not(:where(#scheduleView,#scheduleView *)) { color:var(--accent); }
 html body .field:has(input[type="checkbox"]) input:not(:where(#scheduleView,#scheduleView *)) { box-shadow:none; }
 .inline-add:focus-visible:not(:where(#scheduleView,#scheduleView *)),.quadrant:focus-within .inline-add:not(:where(#scheduleView,#scheduleView *)) { opacity:1; }

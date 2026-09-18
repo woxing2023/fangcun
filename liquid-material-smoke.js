@@ -6,6 +6,33 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwright');
 const controls = 'button,input:not([type=hidden]),textarea,select,option,summary,[role=button],[role=tab],[role=switch],[role=option],[data-task-id],[data-course-id],[data-project-id]';
+const LIGHT_TOKENS = Object.freeze({
+  '--bg':'#e9ecef','--surface':'rgba(244,247,249,.42)','--card':'rgba(246,248,249,.52)','--ink':'#20272d','--muted':'#657079','--accent':'#344f42','--accent-soft':'#e5ece6','--line':'rgba(101,112,121,.24)',
+  '--q1':'#b42318','--q1-soft':'#fff0ee','--q2':'#b54708','--q2-soft':'#fff4e8','--q3':'#175cd3','--q3-soft':'#eef4ff','--q4':'#475467','--q4-soft':'#f2f4f7',
+  '--liquid-fill':'rgba(244,247,249,.42)','--liquid-hover':'rgba(255,255,255,.52)','--liquid-selected':'rgba(176,190,201,.28)','--liquid-pressed':'rgba(176,190,201,.30)','--liquid-panel':'rgba(246,248,249,.52)','--liquid-dialog':'rgba(246,248,249,.83)','--liquid-paper':'rgba(246,248,249,.64)','--liquid-edge':'rgba(101,112,121,.24)','--liquid-highlight':'rgba(255,255,255,.70)','--liquid-shade':'rgba(58,69,77,.16)','--liquid-focus':'rgba(52,79,66,.35)','--liquid-focus-haze':'rgba(52,79,66,.15)','--liquid-glass-tint':'176 190 201','--liquid-tint-alpha':'.12','--liquid-clarity':'1','--liquid-shadow-opacity':'.10','--liquid-depth':'.35','--material-blur':'blur(20px) saturate(.78)'
+});
+const DARK_TOKENS = Object.freeze({
+  '--bg':'#24282e','--surface':'rgba(60,69,81,.66)','--card':'rgba(96,110,128,.20)','--ink':'#e7e9eb','--muted':'#b4bbc3','--accent':'#b8c9d9','--accent-soft':'rgba(157,179,203,.16)','--line':'rgba(206,219,234,.17)',
+  '--q1':'#e1a1ad','--q1-soft':'#4e3742','--q2':'#dbc297','--q2-soft':'#474236','--q3':'#a0c0e4','--q3-soft':'#33455d','--q4':'#c5b2da','--q4-soft':'#423b53',
+  '--liquid-fill':'rgba(60,69,81,.42)','--liquid-hover':'rgba(96,110,128,.30)','--liquid-selected':'rgba(184,201,217,.29)','--liquid-pressed':'rgba(184,201,217,.34)','--liquid-panel':'rgba(60,69,81,.66)','--liquid-dialog':'rgba(60,69,81,.88)','--liquid-paper':'rgba(96,110,128,.20)','--liquid-edge':'rgba(206,219,234,.17)','--liquid-highlight':'rgba(224,233,243,.19)','--liquid-shade':'rgba(0,0,0,.36)','--liquid-focus':'rgba(184,201,217,.43)','--liquid-focus-haze':'rgba(184,201,217,.16)','--liquid-glass-tint':'184 201 217','--liquid-tint-alpha':'.12','--liquid-clarity':'1','--liquid-shadow-opacity':'.10','--liquid-depth':'.35','--material-blur':'blur(20px) saturate(.78)'
+});
+const LIGHT_TOUCH_TOKENS = Object.freeze({
+  '--mobile-glass':'rgba(244,247,249,.62)','--mobile-glass-edge':'rgba(255,255,255,.82)','--mobile-glass-top':'rgba(255,255,255,.86)','--mobile-glass-bottom':'rgba(176,190,201,.15)',
+  '--mobile-glass-shadow':'inset 0 1px 0 rgba(255,255,255,.92), inset 0 -1px 0 rgba(75,95,110,.13), 0 3px 8px -4px rgba(58,69,77,.21)',
+  '--mobile-panel-shadow':'inset 0 1px 0 rgba(255,255,255,.90), inset 0 -1px 0 rgba(101,112,121,.14), 0 8px 20px -13px rgba(58,69,77,.28)',
+  '--mobile-record-shadow':'inset 0 1px 0 rgba(255,255,255,.88), inset 0 -1px 0 rgba(101,112,121,.13), 0 2px 4px -1px rgba(58,69,77,.13)',
+  '--mobile-record-top':'rgba(255,255,255,.69)','--mobile-record-bottom':'rgba(176,190,201,.055)','--mobile-record-base':'#f6f8f9','--mobile-tick':'#edf0f1',
+  '--liquid-dialog':'rgba(246,248,249,.92)','--material-blur':'none'
+});
+const DARK_TOUCH_TOKENS = Object.freeze({
+  '--mobile-glass':'rgba(60,69,81,.65)','--mobile-glass-edge':'rgba(206,219,234,.23)','--mobile-glass-top':'rgba(224,233,243,.16)','--mobile-glass-bottom':'rgba(0,0,0,.24)',
+  '--mobile-glass-shadow':'inset 0 1px 0 rgba(224,233,243,.23), inset 0 -1px 0 rgba(0,0,0,.28), 0 3px 8px -3px rgba(0,0,0,.25)',
+  '--mobile-panel-shadow':'inset 0 1px 0 rgba(224,233,243,.17), inset 0 -1px 0 rgba(0,0,0,.25), 0 8px 20px -12px rgba(0,0,0,.36)',
+  '--mobile-record-shadow':'inset 0 1px 0 rgba(224,233,243,.24), inset 0 -1px 0 rgba(0,0,0,.23), 0 2px 4px -1px rgba(0,0,0,.24)',
+  '--mobile-record-top':'rgba(224,233,243,.12)','--mobile-record-bottom':'rgba(0,0,0,.08)','--mobile-record-base':'#3c4551','--mobile-tick':'#2d333b',
+  '--liquid-dialog':'rgba(60,69,81,.94)','--material-blur':'none'
+});
+const normalizeToken = value => value.replace(/\s+/g,'').replace(/0\.10\b/g,'.10');
 
 async function audit(page, label, root = 'body') {
   await page.waitForTimeout(350); // Allow the shared view reveal animation to expose its controls.
@@ -20,8 +47,10 @@ async function audit(page, label, root = 'body') {
       count++;
       const s = getComputedStyle(el), name = el.id || `${el.tagName}.${String(el.className).replace(/\s+/g,'.')}`;
       const bg = rgba(s.backgroundColor);
-      const calendar = Boolean(el.closest('#scheduleView')) || (document.body.dataset.activeView==='schedule' && el.matches('.sidebar .nav-item.active'));
+      const calendar = Boolean(el.closest('#scheduleView'));
       // Calendar uses a shared optical plane with semantic course and selected colors.
+      // Sidebar rows keep one view-independent material (desktop suites: "Sidebar row material must match across views"),
+      // so the flat-plane rule scopes to the calendar surface itself.
       if(calendar) {
         if(s.backdropFilter!=='none' || s.filter!=='none') issues.push(`${name}: per-control calendar filtering`);
         if(el.matches('[data-calendar-track]') && s.boxShadow!=='none') issues.push(`${name}: empty-track shadow`);
@@ -83,6 +112,27 @@ async function audit(page, label, root = 'body') {
       assert.equal(await page.evaluate(()=>document.documentElement.dataset.skin),'liquid');
       assert.equal(await page.evaluate(()=>document.body.classList.contains('dark')),mode==='dark');
       const label = `${width}/${mode}`;
+      const baseTokens = mode === 'dark' ? DARK_TOKENS : LIGHT_TOKENS;
+      const expectedTokens = width < 500 ? {...baseTokens, ...(mode === 'dark' ? DARK_TOUCH_TOKENS : LIGHT_TOUCH_TOKENS)} : baseTokens;
+      const actual=await page.evaluate(tokens=>Object.fromEntries(Object.keys(tokens).map(key=>[key,getComputedStyle(document.body).getPropertyValue(key).trim()])),expectedTokens);
+      for(const [key,expected] of Object.entries(expectedTokens)) assert.equal(normalizeToken(actual[key]),normalizeToken(expected),`${label}: ${key}`);
+      if (width < 500) {
+        // §2.5.1 touch budget rows: shared 12px capture, per-skin scrim, two-layer body background.
+        const touchSpec = await page.evaluate(() => {
+          const compact = value => value.replace(/\s+/g,'').replace(/0\.(\d)/g,'.$1');
+          const top = document.querySelector('.topbar');
+          const probeDialog = document.createElement('dialog'); document.body.append(probeDialog); probeDialog.showModal();
+          const backdrop = getComputedStyle(probeDialog,'::backdrop').backgroundColor;
+          probeDialog.close(); probeDialog.remove();
+          const body = getComputedStyle(document.body);
+          return { capture:compact(getComputedStyle(top).backdropFilter), backdrop:compact(backdrop),
+            gradients:(body.backgroundImage.match(/gradient\(/g)||[]).length, bgColor:compact(body.backgroundColor) };
+        });
+        assert.equal(touchSpec.capture,'blur(12px)saturate(1.16)',`${label}: shared 12px topbar/dialog capture`);
+        assert.equal(touchSpec.backdrop,mode==='dark'?'rgba(0,0,0,.36)':'rgba(32,39,45,.31)',`${label}: dialog::backdrop scrim`);
+        assert.equal(touchSpec.gradients,2,`${label}: body keeps the two-layer gradient`);
+        assert.equal(touchSpec.bgColor,mode==='dark'?'rgb(36,40,46)':'rgb(233,236,239)',`${label}: body background resolves var(--bg)`);
+      }
       for(const view of ['today','matrix','schedule','projects','inbox']) {
         await page.evaluate(view=>document.querySelector(`.main-nav [data-view="${view}"]`).click(),view);
         await audit(page,`${label}/${view}`);
@@ -106,6 +156,8 @@ async function audit(page, label, root = 'body') {
           assert.ok(await page.locator('.liquid-select-menu:visible').count()>0,'Custom menu must open');
           await audit(page,`${label}/select-menu`,'.liquid-select-menu:visible');
           await page.keyboard.press('Escape');
+          // The 160ms visual exit keeps the menu measurable; wait for it to settle instead of sampling mid-animation.
+          await page.waitForFunction(() => [...document.querySelectorAll('.liquid-select-menu')].every(menu => menu.hidden || menu.getBoundingClientRect().width === 0), null, {timeout:2000});
           assert.equal(await page.locator('.liquid-select-menu:visible').count(),0);
         }
         await page.locator(`#${id} .close-button`).click();

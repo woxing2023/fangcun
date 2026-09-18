@@ -14,7 +14,7 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "app.fangcun"
+    namespace = "top.woxingsf.fangcun"
     compileSdk = 36
 
     buildFeatures {
@@ -22,11 +22,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.fangcun"
+        applicationId = "top.woxingsf.fangcun"
         minSdk = 26
         targetSdk = 36
         versionCode = 33
         versionName = "2.7.0"
+        buildConfigField("String", "FANGCUN_BASE_URL", "https://schedule.woxingsf.top/")
     }
 
     signingConfigs {

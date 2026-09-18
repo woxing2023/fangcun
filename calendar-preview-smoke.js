@@ -14,7 +14,7 @@ const {chromium}=require(process.env.FANGCUN_PLAYWRIGHT_MODULE||'playwright');
  try{
   await page.goto(pathToFileURL(path.join(__dirname,'release/calendar-review.html')).href);
   const payload=await page.evaluate(()=>({build:preview.build,count:Object.keys(preview.snapshots).length,desktopCoarseMedia:/\(pointer:\s*coarse\)/.test(preview.styles.desktop),touchCoarseMedia:/\(pointer:\s*coarse\)/.test(preview.styles.touch)}));
-  assert.equal(payload.build,'20260911-calendar-v3');assert.equal(payload.count,12);
+  assert.equal(payload.build,'20260915-frontend-lab-v1');assert.equal(payload.count,12);
   assert.equal(payload.desktopCoarseMedia,true,'fine snapshot retains original CSS media');
   assert.equal(payload.touchCoarseMedia,false,'touch stylesheet explicitly simulates coarse media');
   for(const orientation of ['desktop','portrait','landscape'])for(const calendar of ['week','timetable'])for(const layout of ['overview','list']){
@@ -22,7 +22,7 @@ const {chromium}=require(process.env.FANGCUN_PLAYWRIGHT_MODULE||'playwright');
    await page.locator(`.controls [data-calendar="${calendar}"]`).click();
    await page.locator(`.controls [data-layout="${layout}"]`).click();
    const key=`${orientation}-${calendar}-${layout}`;
-   await page.waitForFunction(key=>document.querySelector('iframe').contentDocument?.documentElement.dataset.previewView===key,key);
+   await page.waitForFunction(key=>document.querySelector('iframe').contentDocument?.documentElement?.dataset?.previewView===key,key);
    const frame=page.frames().find(frame=>frame.parentFrame());
    await frame.waitForFunction(()=>window.FangcunTouchMaterial?.enabled);
    await frame.evaluate(()=>document.fonts.ready);
@@ -55,7 +55,7 @@ const {chromium}=require(process.env.FANGCUN_PLAYWRIGHT_MODULE||'playwright');
    await page.locator('.controls [data-calendar="week"]').click();
    await page.locator('.controls [data-layout="overview"]').click();
    const key=`${orientation}-week-overview`;
-   await page.waitForFunction(key=>document.querySelector('iframe').contentDocument?.documentElement.dataset.previewView===key,key);
+   await page.waitForFunction(key=>document.querySelector('iframe').contentDocument?.documentElement?.dataset?.previewView===key,key);
    const frame=page.frames().find(frame=>frame.parentFrame());
    await frame.waitForFunction(()=>window.FangcunTouchMaterial?.enabled);
    await frame.evaluate(()=>document.fonts.ready);
@@ -74,9 +74,9 @@ const {chromium}=require(process.env.FANGCUN_PLAYWRIGHT_MODULE||'playwright');
   // Internal calendar switches bridge to the outer snapshot controls offline.
   let frame=page.frames().find(frame=>frame.parentFrame());
   await frame.locator('#calendarListBtn').click();
-  await page.waitForFunction(()=>document.querySelector('iframe').contentDocument?.documentElement.dataset.previewView==='landscape-week-list');
+  await page.waitForFunction(()=>document.querySelector('iframe').contentDocument?.documentElement?.dataset?.previewView==='landscape-week-list');
   frame=page.frames().find(frame=>frame.parentFrame());await frame.locator('#calendarZoomFit').click();
-  await page.waitForFunction(()=>document.querySelector('iframe').contentDocument?.documentElement.dataset.previewView==='landscape-week-overview');
+  await page.waitForFunction(()=>document.querySelector('iframe').contentDocument?.documentElement?.dataset?.previewView==='landscape-week-overview');
   assert.deepEqual(network,[],'the file review must issue no HTTP requests');assert.deepEqual(errors,[]);
   const directory=path.join(__dirname,'release','qa');fs.mkdirSync(directory,{recursive:true});
   fs.writeFileSync(path.join(directory,'calendar-preview-report.json'),JSON.stringify({passed:true,...report,networkRequests:network.length,errors},null,2)+'\n');

@@ -86,12 +86,16 @@ if (context.__recurrenceResult.after !== context.__recurrenceResult.before + 1 |
 }
 
 vm.runInContext(`
+  const smartTarget = { tasks: [...data.tasks], projects: [...data.projects], courses: [...data.courses] };
   const smartProject = FangcunSmartParser.parseNaturalInput("建立长期项目：毕业论文，下一步：阅读三篇综述", { now: new Date("2026-08-25T09:00:00+08:00"), totalWeeks: 17 });
-  addSmartDraft(smartProject);
+  addSmartDraft(smartProject, smartTarget);
+  const smartTask = FangcunSmartParser.parseNaturalInput("明天下午三点交作业，重要紧急，提前一小时", { now: new Date("2026-08-25T09:00:00+08:00"), totalWeeks: 17 });
+  addSmartDraft(smartTask, smartTarget);
+  data.tasks = smartTarget.tasks;
+  data.projects = smartTarget.projects;
+  data.courses = smartTarget.courses;
   const createdProject = data.projects.find((project) => project.name === "毕业论文");
   const createdNextAction = data.tasks.find((task) => task.id === createdProject?.nextActionTaskId);
-  const smartTask = FangcunSmartParser.parseNaturalInput("明天下午三点交作业，重要紧急，提前一小时", { now: new Date("2026-08-25T09:00:00+08:00"), totalWeeks: 17 });
-  addSmartDraft(smartTask);
   globalThis.__smartRuntimeResult = { createdProject, createdNextAction, smartTask: data.tasks[0] };
 `, context);
 if (!context.__smartRuntimeResult.createdNextAction || context.__smartRuntimeResult.createdNextAction.quadrant !== "q2") {
@@ -124,7 +128,17 @@ if (context.__migrationResult.ranged.startTime !== "15:00" || context.__migratio
 vm.runInContext(`
   data.semester = { name: "校历测试", startDate: "2026-02-16", totalWeeks: 20, showWeekend: true };
   const calendarCourse = { id: "calendar-course", name: "校历课程", day: 1, startSection: 1, endSection: 2, weeks: [1], reminderMinutes: 10 };
-  data.courses = [calendarCourse];
+  const rescheduledCourse = { id: "calendar-course-resched", name: "同落点调课课程", day: 1, startSection: 1, endSection: 2, weeks: [1], reminderMinutes: 10 };
+  const movedCourse = { id: "calendar-course-moved", name: "挪走课程", day: 1, startSection: 1, endSection: 2, weeks: [1], reminderMinutes: 10 };
+  const cancelledCourse = { id: "calendar-course-cancelled", name: "停课课程", day: 1, startSection: 1, endSection: 2, weeks: [1], reminderMinutes: 10 };
+  const otherDayCourse = { id: "calendar-course-otherday", name: "非当日课程", day: 2, startSection: 1, endSection: 2, weeks: [1], reminderMinutes: 10 };
+  data.courses = [calendarCourse, rescheduledCourse, movedCourse, cancelledCourse, otherDayCourse];
+  data.courseExceptions = [
+    { id: "exc-same", courseId: "calendar-course-resched", date: "2026-02-16", targetDate: "2026-02-16", type: "reschedule", day: 1, startSection: 1, endSection: 2 },
+    { id: "exc-moved", courseId: "calendar-course-moved", date: "2026-02-16", targetDate: "2026-02-17", type: "reschedule", day: 1, startSection: 1, endSection: 2 },
+    { id: "exc-cancel", courseId: "calendar-course-cancelled", date: "2026-02-16", type: "cancel" },
+    { id: "exc-otherday", courseId: "calendar-course-otherday", date: "2026-02-17", targetDate: "2026-02-17", type: "reschedule", day: 2, startSection: 1, endSection: 2 },
+  ];
   data.calendarRules = [
     { id: "holiday", date: "2026-02-16", type: "holiday", name: "春节" },
     { id: "makeup", date: "2026-02-22", type: "teaching", name: "按周一补课", useDay: 1 },
@@ -132,11 +146,15 @@ vm.runInContext(`
   globalThis.__calendarResult = {
     holiday: courseOccurrence(calendarCourse, new Date("2026-02-16T12:00:00+08:00")),
     makeup: courseOccurrence(calendarCourse, new Date("2026-02-22T12:00:00+08:00")),
+    reschedMakeup: courseOccurrence(rescheduledCourse, new Date("2026-02-22T12:00:00+08:00")),
+    movedMakeup: courseOccurrence(movedCourse, new Date("2026-02-22T12:00:00+08:00")),
+    cancelledMakeup: courseOccurrence(cancelledCourse, new Date("2026-02-22T12:00:00+08:00")),
+    otherDayMakeup: courseOccurrence(otherDayCourse, new Date("2026-02-22T12:00:00+08:00")),
     presetCount: chinaHolidayRules2026().length,
   };
 `, context);
-if (context.__calendarResult.holiday || context.__calendarResult.makeup?.id !== "calendar-course" || context.__calendarResult.presetCount !== 39) {
-  throw new Error("节假日停课、补课映射或 2026 官方预设不正确");
+if (context.__calendarResult.holiday || context.__calendarResult.makeup?.id !== "calendar-course" || context.__calendarResult.reschedMakeup?.id !== "calendar-course-resched" || context.__calendarResult.movedMakeup || context.__calendarResult.cancelledMakeup || context.__calendarResult.otherDayMakeup || context.__calendarResult.presetCount !== 39) {
+  throw new Error("节假日停课、补课映射（含逐次调课记录）或 2026 官方预设不正确");
 }
 
 vm.runInContext(`
@@ -156,8 +174,8 @@ vm.runInContext(`
   const semanticCourses = normalizeData({
     tasks: [], projects: [], semester: defaultSemester(), timeSlots: defaultTimeSlots(), courseExceptions: [], calendarRules: [], settings: {},
     courses: [
-      { id: "physics-tue", name: "大学物理", code: "GEN1001", day: 2, startSection: 1, endSection: 2, weeks: [1] },
-      { id: "physics-fri", name: "大学物理", code: "GEN1001", day: 5, startSection: 1, endSection: 2, weeks: [1] },
+      { id: "physics-tue", name: "大学物理", code: "PHY1006", day: 2, startSection: 1, endSection: 2, weeks: [1] },
+      { id: "physics-fri", name: "大学物理", code: "PHY1006", day: 5, startSection: 1, endSection: 2, weeks: [1] },
       { id: "chemistry", name: "化学原理I", code: "CHEM1001", day: 3, startSection: 3, endSection: 3, weeks: [1] },
       { id: "calculus", name: "微积分A（上）", code: "MATH1004", day: 1, startSection: 4, endSection: 5, weeks: [1] },
     ],
@@ -325,7 +343,7 @@ if (context.__importFlow.afterImport !== 3 || !context.__importFlow.mergedWeeks.
 vm.runInContext(`
   const unresolved = FangcunSmartParser.parseNaturalInput("15:00交实验报告", { now: new Date("2026-08-25T09:00:00+08:00") });
   data.tasks = [];
-  addSmartDraft(unresolved);
+  addSmartDraft(unresolved, { tasks: data.tasks, projects: data.projects, courses: data.courses });
   globalThis.__uncertainFlow = data.tasks[0];
 `, context);
 if (context.__uncertainFlow.quadrant !== null || !context.__uncertainFlow.confirmationIssues.some((issue) => issue.field === "due")) {

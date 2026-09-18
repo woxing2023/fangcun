@@ -1,4 +1,4 @@
-package app.fangcun;
+package top.woxingsf.fangcun;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;

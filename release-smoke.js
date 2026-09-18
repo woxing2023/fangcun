@@ -39,7 +39,8 @@ assert(upload.includes("127.0.0.1:18443"), "Deployment script must preserve the 
 assert(buildRelease.includes("android\\app\\build") && buildRelease.includes("android\\.gradle"), "Release staging does not exclude Android build caches");
 assert(!buildRelease.includes('@("android", "deploy", "docs", "imports")'), "Release archive must not copy ignored personal imports");
 assert(buildRelease.includes("fictional-university-timetable-sample.json"), "Release archive is missing the fictional import example");
-assert(install.includes("outlook-sync.js") && install.includes("google-sync.js") && install.includes("reset-password.js") && install.includes("deploy/reset-password.sh") && install.includes("deploy/verify.sh"), "Server install payload is incomplete");
+assert(install.includes("outlook-sync.js") && install.includes("google-sync.js") && install.includes("reset-password.js") && install.includes("calendar-occurrences.js") && install.includes("deploy/reset-password.sh") && install.includes("deploy/verify.sh"), "Server install payload is incomplete");
+assert(buildRelease.includes("calendar-occurrences.js") && buildRelease.includes("calendar-occurrences-smoke.js"), "Release archive is missing the calendar occurrences module or smoke");
 assert(install.includes("privacy.html") && buildRelease.includes('"privacy.html"'), "Release payload is missing the privacy policy");
 assert(verify.includes("systemctl is-active") && verify.includes("127\\.0\\.0\\.1:18443"), "Server verification is incomplete");
 assert(verify.includes("FANGCUN_STORE_RELEASE") && verify.includes("FANGCUN_APP_BEIAN") && verify.includes("FANGCUN_ICP_BEIAN"), "Store deployment checks are incomplete");

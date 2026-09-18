@@ -27,7 +27,7 @@
   .admin-mode .mobile-bottom-nav button:not(#mobileAdminNav) { display:none; }
   .view-intro { min-height:auto; padding:16px 14px 10px; }.view-intro h2 { font-size:18px; }.view-intro p { font-size:11px; }
   .sidebar { position:fixed; z-index:80; width:min(82vw,320px); height:100dvh; padding:calc(22px + var(--safe-top)) 18px calc(16px + var(--safe-bottom)); background:var(--surface); }.sidebar-note { display:none; }.sidebar-actions { margin-top:auto; flex-wrap:wrap; }.sidebar-actions > * { flex:1 1 auto; }
-  .sidebar-backdrop { position:fixed; z-index:70; inset:0; width:100%; height:100dvh; display:block; padding:0; border:0; background:rgba(18,24,20,.34); opacity:0; pointer-events:none; transition:opacity .18s ease; }.sidebar.open + .sidebar-backdrop { opacity:1; pointer-events:auto; }
+  .sidebar-backdrop { position:fixed; z-index:70; inset:0; width:100%; height:100dvh; display:block; padding:0; border:0; background:rgba(18,24,20,.34); opacity:0; pointer-events:none; transition:opacity var(--motion-drawer) var(--ease-drawer); }.sidebar.open + .sidebar-backdrop { opacity:1; pointer-events:auto; }
   .quick-add,.mobile-create-fab { display:none !important; }
   dialog.modal { max-height:94dvh; }.modal form { max-height:94dvh; }
   button,.primary-button,.secondary-button,.text-button,input,select { min-height:44px; }

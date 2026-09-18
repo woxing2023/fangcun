@@ -1,5 +1,5 @@
 const APP_VERSION = "2.8.0";
-const APP_BUILD = "20260915-pr2-link";
+const APP_BUILD = "20260915-frontend-lab-v1";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";
@@ -96,6 +96,8 @@ let waitingServiceWorker = null;
 let focusRotation = 0;
 let pendingScheduleImport = null;
 let currentLinkSnapshot = null;
+let recentlyCreatedTaskId = null;
+let recentlyCreatedTaskTimer = 0;
 
 function accountKey(base) {
   return currentUser?.id ? `${base}:user-${currentUser.id}` : base;
@@ -125,11 +127,16 @@ const projectColors = {
 };
 
 const taskTypeLabels = { task: "任务", event: "日程", assignment: "作业", exam: "考试", review: "复习" };
+const TASK_TYPES = Object.freeze(["task", "event", "assignment", "exam", "review"]);
+const deadlineType = (type) => TASK_TYPES.includes(type) && type !== "event";
+const QUADRANTS = Object.freeze(["q1", "q2", "q3", "q4"]);
 const repeatLabels = { daily: "每天", weekdays: "工作日", weekly: "每周", monthly: "每月" };
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const openDialog = dialog => window.FangcunAppearance?.openDialog(dialog) || dialog?.showModal();
+const closeDialog = (dialog, returnValue = "") => window.FangcunAppearance?.closeDialog(dialog, returnValue) || dialog?.close(returnValue);
 
 function mediaMatches(query, fallback = false) {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : fallback;
@@ -141,7 +148,7 @@ function mobileAppLayout() {
 
 function openPrimaryCreate() {
   if (!mobileAppLayout()) return openTaskModal();
-  $("#mobileCreateModal").showModal();
+  openDialog($("#mobileCreateModal"));
   setTimeout(() => $("#mobileCaptureInput").focus(), 80);
 }
 
@@ -150,12 +157,12 @@ function submitMobileCreate(event) {
   const source = $("#mobileCaptureInput").value.trim();
   if (!source) return $("#mobileCaptureInput").focus();
   $("#quickInput").value = source;
-  $("#mobileCreateModal").close();
+  closeDialog($("#mobileCreateModal"));
   submitQuickTask({ preventDefault() {} });
 }
 
 function openDetailedMobileCreate(kind) {
-  $("#mobileCreateModal").close();
+  closeDialog($("#mobileCreateModal"));
   if (kind === "course") openCourseModal();
   else if (kind === "project") openProjectModal();
   else openTaskModal();
@@ -358,6 +365,8 @@ let displayedYear = new Date().getFullYear();
 let scheduleMode = "week";
 let semesterDraftSlots = [];
 let smartDrafts = [];
+let taskModalScheduleState = null;
+const smartScheduleCaches = new WeakMap();
 let toastTimer;
 let syncTimer;
 let syncState = {
@@ -750,7 +759,7 @@ function sendLinkTestNotification() {
 function openDataHub(tab = "account") {
   closeSidebar();
   selectDataHubTab(tab);
-  if (!$("#cloudModal").open) $("#cloudModal").showModal();
+  if (!$("#cloudModal").open) openDialog($("#cloudModal"));
 }
 
 function switchAccount(user) {
@@ -962,7 +971,7 @@ async function logoutCloud() {
   localStorage.removeItem(LAST_USER_KEY);
   setCloudIndicator("", "登录以同步");
   renderCloudPanel();
-  if ($("#cloudModal").open) $("#cloudModal").close();
+  if ($("#cloudModal").open) closeDialog($("#cloudModal"));
   showAuthGate();
 }
 
@@ -1091,6 +1100,12 @@ function classify(important, urgent) {
   return "q4";
 }
 
+function effectiveQuadrant(task) {
+  if (QUADRANTS.includes(task.quadrant)) return task.quadrant;
+  if (typeof task.important === "boolean" && typeof task.urgent === "boolean") return classify(task.important, task.urgent);
+  return null;
+}
+
 function decisionForQuadrant(quadrant) {
   return {
     q1: { important: true, urgent: true },
@@ -1144,14 +1159,85 @@ function courseOccurrence(course, date, context = null) {
   if (calendarRule?.type === "holiday") return null;
   const weekday = calendarRule?.type === "teaching" ? Number(calendarRule.useDay) : (date.getDay() || 7);
   if (!course.weeks.includes(week)) return null;
+  // 补课日实例的逐次调整（同步方在补课日本身建立的记录：删除/改时该次补课）。
+  // cancel → 该次补课已删除；reschedule 且已挪往他处 → 不再重放；同落点 → 沿用其记录的节次。
+  let teachingDayRecord = null;
+  if (calendarRule?.type === "teaching" && Number(course.day) === Number(weekday)) {
+    const sameDay = data.courseExceptions.find((item) => item.courseId === course.id && item.date === dateKey);
+    if (sameDay?.type === "cancel") return null;
+    if (sameDay?.type === "reschedule") {
+      if (sameDay.targetDate && sameDay.targetDate !== dateKey) return null;
+      teachingDayRecord = sameDay;
+    }
+  }
   const exception = data.courseExceptions.length ? exceptionForWeek(course, week) : null;
   if (exception?.type === "cancel") return null;
-  if (exception?.type === "reschedule") return (exception.targetDate ? exception.targetDate === dateKey : exception.day === weekday) ? { ...course, day: exception.day, startSection: exception.startSection, endSection: exception.endSection, occurrenceChanged: true } : null;
+  if (exception?.type === "reschedule") {
+    // 补课日（teaching）重放指定星期的课表时：只重放 course.day 等于规则 useDay 的课程本身，
+    // 再叠加本周该实例的逐次调整记录——同落点记录（如外部日历同步产生的逐周 reschedule）
+    // 沿用节次落到补课日；已挪去别处（targetDate 非本周原日期 / 按星期挪走）的实例则不重复出现。
+    if (calendarRule?.type === "teaching") {
+      if (Number(course.day) !== Number(weekday)) return null;
+      const originalKey = localISO(addDays(weekStartDate(week), course.day - 1));
+      const movedAway = exception.targetDate ? exception.targetDate !== originalKey : Number(exception.day) !== Number(course.day);
+      if (movedAway) return null;
+      const source = teachingDayRecord || exception;
+      return { ...course, day: weekday, startSection: source.startSection, endSection: source.endSection, occurrenceChanged: true };
+    }
+    return (exception.targetDate ? exception.targetDate === dateKey : exception.day === weekday) ? { ...course, day: exception.day, startSection: exception.startSection, endSection: exception.endSection, occurrenceChanged: true } : null;
+  }
+  if (calendarRule?.type === "teaching" && Number(course.day) === Number(weekday) && teachingDayRecord) {
+    return { ...course, day: weekday, startSection: teachingDayRecord.startSection, endSection: teachingDayRecord.endSection, occurrenceChanged: true };
+  }
   return course.day === weekday ? course : null;
 }
 
 function courseOccursOn(course, date) {
   return Boolean(courseOccurrence(course, date));
+}
+
+// 学期内全部课程实例（逐日扫描，含补课日重放与被挪入的实例）——导出 .ics / 安卓原生日历 /
+// 服务端订阅与日历同步共用的唯一枚举口径，必须与 courseOccurrence() 语义一致。
+function semesterCourseOccurrences() {
+  const startISO = data.semester?.startDate;
+  const totalWeeks = Number(data.semester?.totalWeeks) || 0;
+  if (!startISO || totalWeeks < 1) return [];
+  const items = [];
+  for (let offset = 0; offset < totalWeeks * 7; offset += 1) {
+    const date = addDays(dateFromISO(startISO), offset);
+    const dateKey = localISO(date);
+    data.courses.forEach((course) => {
+      const occurrence = courseOccurrence(course, date);
+      if (!occurrence) return;
+      items.push({ course, occurrence, dateKey, keyDate: occurrenceKeyDate(course, dateKey), record: occurrenceRecord(course, dateKey) });
+    });
+  }
+  return items;
+}
+
+// 实例的稳定键日期：被挪来的实例沿用其原始日期；补课日重放取补课日本身；
+// 其余逐周调整沿用记录的原始日期——保证同一实例在多次枚举间键稳定。
+function occurrenceKeyDate(course, dateKey) {
+  const moved = data.courseExceptions.find((item) => item.courseId === course.id && item.type === "reschedule" && item.targetDate === dateKey);
+  if (moved) return moved.date;
+  if (calendarRuleForDate(dateKey)?.type === "teaching") return dateKey;
+  const exception = data.courseExceptions.length ? exceptionForWeek(course, currentSemesterWeek(dateFromISO(dateKey))) : null;
+  if (exception?.type === "reschedule") return exception.date;
+  return dateKey;
+}
+
+// 实例的来源记录（标题/地点覆盖用）：与 courseOccurrence() 内部选择保持一致的近似。
+function occurrenceRecord(course, dateKey) {
+  if (!data.courseExceptions.length) return null;
+  const moved = data.courseExceptions.find((item) => item.courseId === course.id && item.type === "reschedule" && item.targetDate === dateKey);
+  if (moved) return moved;
+  const rule = calendarRuleForDate(dateKey);
+  if (rule?.type === "teaching" && Number(course.day) === Number(rule.useDay)) {
+    const sameDay = data.courseExceptions.find((item) => item.courseId === course.id && item.date === dateKey);
+    if (sameDay?.type === "reschedule") return sameDay;
+  }
+  const exception = exceptionForWeek(course, currentSemesterWeek(dateFromISO(dateKey)));
+  return exception || null;
 }
 
 function parseWeeks(value, maxWeeks = data.semester.totalWeeks) {
@@ -1242,7 +1328,8 @@ function renderTaskCard(task) {
   const dueClass = deadline.kind;
   const dueText = deadlineLabel(task);
   const scheduleText = task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ""}${task.endTime ? `–${task.endTime}` : ""}` : "";
-  return `<article class="task-card" draggable="true" data-task-id="${task.id}">
+  const entering = task.id === recentlyCreatedTaskId ? " item-entering" : "";
+  return `<article class="task-card${entering}" draggable="true" data-task-id="${task.id}">
     <button class="complete-btn" data-complete-id="${task.id}" aria-label="完成事项"></button>
     <h4>${escapeHTML(task.title)}</h4>
     <div class="task-meta">
@@ -1260,7 +1347,7 @@ function renderTaskCard(task) {
 
 function renderQuadrants() {
   Object.keys(quadrantInfo).forEach((quadrant) => {
-    const tasks = data.tasks.filter((task) => task.quadrant === quadrant && !task.completed);
+    const tasks = data.tasks.filter((task) => effectiveQuadrant(task) === quadrant && !task.completed);
     $(`#${quadrant}List`).innerHTML = tasks.length
       ? tasks.map(renderTaskCard).join("")
       : '<div class="empty-state">这里暂时很清爽</div>';
@@ -1270,7 +1357,8 @@ function renderQuadrants() {
 function renderListRow(task, mode) {
   const project = projectById(task.projectId);
   const course = courseById(task.courseId);
-  const info = task.quadrant ? quadrantInfo[task.quadrant] : null;
+  const quadrant = effectiveQuadrant(task);
+  const info = quadrant ? quadrantInfo[quadrant] : null;
   const detailParts = [];
   if (task.startDate) detailParts.push(`${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ""}${task.endTime ? `–${task.endTime}` : ""}`);
   if (task.completed) detailParts.push("已完成");
@@ -1283,7 +1371,8 @@ function renderListRow(task, mode) {
   if (task.confirmationIssues?.length) detailParts.push(`待确认：${task.confirmationIssues.map((issue) => issue.message || issue).join("、")}`);
   if (info) detailParts.push(info.name);
   if (!detailParts.length) detailParts.push("尚未设置日期和分类");
-  return `<div class="list-row" data-task-id="${task.id}">
+  const entering = task.id === recentlyCreatedTaskId ? " item-entering" : "";
+  return `<div class="list-row${entering}" data-task-id="${task.id}">
     <button class="complete-btn ${task.completed ? "completed" : ""}" data-complete-id="${task.id}" data-complete-to="${!task.completed}" aria-pressed="${task.completed}" aria-label="${task.completed ? "恢复" : "完成"}事项"></button>
     <div class="list-main"><strong style="${task.completed ? "text-decoration:line-through;opacity:.55" : ""}">${escapeHTML(task.title)}</strong><span>${escapeHTML(detailParts.join(" · "))}</span></div>
     <div class="row-actions">${mode === "inbox" ? `<button class="classify-button" data-inbox-reparse="${task.id}">重新识别</button>` : info ? `<span class="meta-tag" style="color:${info.color}">${info.action}</span>` : ""}</div>
@@ -1291,7 +1380,7 @@ function renderListRow(task, mode) {
 }
 
 function renderInbox() {
-  const tasks = data.tasks.filter((task) => !task.quadrant && !task.completed);
+  const tasks = data.tasks.filter((task) => !effectiveQuadrant(task) && !task.completed);
   $("#inboxList").innerHTML = tasks.length ? tasks.map((task) => renderListRow(task, "inbox")).join("") : '<div class="empty-state" style="margin:18px">收集箱已清空，思绪也轻了一点。</div>';
   $("#inboxPanelCount").textContent = `${tasks.length} 项`;
 }
@@ -1311,7 +1400,7 @@ function reparseInboxTask(taskId) {
     confirmationIssues: draft.issues || [], source: "natural-language"
   });
   saveData();
-  showToast(task.quadrant && !task.confirmationIssues.length ? "已重新识别并移出待确认" : `已补全可识别字段，仍有 ${task.confirmationIssues.length} 项待确认`);
+  showToast(effectiveQuadrant(task) && !task.confirmationIssues.length ? "已重新识别并移出待确认" : `已补全可识别字段，仍有 ${task.confirmationIssues.length} 项待确认`);
 }
 
 function taskFocusScore(task, now = new Date()) {
@@ -1353,7 +1442,7 @@ function focusReason(task) {
 }
 
 function focusTasks(limit = 3) {
-  const candidates = data.tasks.filter((task) => !task.completed && task.quadrant && task.focusDismissedDate !== localISO());
+  const candidates = data.tasks.filter((task) => !task.completed && effectiveQuadrant(task) && task.focusDismissedDate !== localISO());
   const pinned = candidates.filter((task) => task.focusPinned).sort((a, b) => taskFocusScore(b) - taskFocusScore(a));
   const ranked = candidates.filter((task) => !task.focusPinned).sort((a, b) => taskFocusScore(b) - taskFocusScore(a));
   if (ranked.length > limit && focusRotation) {
@@ -1379,7 +1468,7 @@ function renderToday() {
   const today = localISO(now);
   const activeTasks = data.tasks.filter((task) => !task.completed && (task.today || task.startDate === today || (task.due && task.due <= today)));
   const completedTasks = data.tasks.filter((task) => task.completed && task.completedAt && localISO(new Date(task.completedAt)) === today);
-  const inbox = data.tasks.filter((task) => !task.completed && !task.quadrant);
+  const inbox = data.tasks.filter((task) => !task.completed && !effectiveQuadrant(task));
   const timeline = todayTimelineItems(now);
   const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const upcoming = timeline.find((item) => item.end >= currentTime);
@@ -1527,7 +1616,7 @@ async function deleteOwnAccount() {
     syncState.authenticated = false;
     syncState.user = null;
     $("#deleteAccountPassword").value = "";
-    $("#cloudModal").close();
+    closeDialog($("#cloudModal"));
     showAuthGate();
     showToast("账号及方寸云端数据已永久删除");
   } catch (error) {
@@ -2039,13 +2128,13 @@ function renderProjects() {
 
 function renderCounts() {
   const active = data.tasks.filter((task) => !task.completed);
-  $("#matrixCount").textContent = active.filter((task) => task.quadrant).length;
-  $("#inboxCount").textContent = active.filter((task) => !task.quadrant).length;
+  $("#matrixCount").textContent = active.filter((task) => effectiveQuadrant(task)).length;
+  $("#inboxCount").textContent = active.filter((task) => !effectiveQuadrant(task)).length;
   $("#todayCount").textContent = active.filter((task) => task.today || (task.due && task.due <= localISO())).length;
   $("#scheduleCount").textContent = data.courses.filter((course) => courseOccursOn(course, new Date())).length + active.filter((task) => task.due === localISO() || task.startDate === localISO()).length;
   $("#projectCount").textContent = data.projects.length;
   ["q1", "q2", "q3", "q4"].forEach((quadrant) => {
-    $(`#mobile${quadrant.toUpperCase()}Count`).textContent = active.filter((task) => task.quadrant === quadrant).length;
+    $(`#mobile${quadrant.toUpperCase()}Count`).textContent = active.filter((task) => effectiveQuadrant(task) === quadrant).length;
   });
 }
 
@@ -2236,6 +2325,23 @@ function renderAll() {
   renderDailyTip();
   renderProjectOptions();
   bindDynamicEvents();
+  const enteringItems = $$(".item-entering");
+  if (enteringItems.length) {
+    const clearEntering = () => {
+      enteringItems.forEach((element) => element.classList.remove("item-entering"));
+      recentlyCreatedTaskId = null;
+      clearTimeout(recentlyCreatedTaskTimer);
+      recentlyCreatedTaskTimer = 0;
+    };
+    enteringItems.forEach((element) => {
+      element.addEventListener("animationend", clearEntering, { once: true });
+      element.addEventListener("animationcancel", clearEntering, { once: true });
+    });
+    clearTimeout(recentlyCreatedTaskTimer);
+    recentlyCreatedTaskTimer = setTimeout(clearEntering, 250);
+  } else if (recentlyCreatedTaskId) {
+    recentlyCreatedTaskId = null;
+  }
   syncNativeSnapshot();
 }
 
@@ -2343,9 +2449,159 @@ function renderProjectOptions() {
   courseSelect.value = data.courses.some((course) => course.id === currentCourse) ? currentCourse : "";
 }
 
+const REMINDER_CONFIG = Object.freeze({
+  task: Object.freeze({ select: "#taskReminder", custom: "#taskReminderCustom", field: "#taskReminderCustomField", presets: Object.freeze([-1, 0, 10, 30, 60, 1440]) }),
+  course: Object.freeze({ select: "#courseReminder", custom: "#courseReminderCustom", field: "#courseReminderCustomField", presets: Object.freeze([-1, 5, 10, 20, 30]) }),
+});
+
+function reminderConfig(kind) {
+  if (!REMINDER_CONFIG[kind]) throw new Error(`Unknown reminder kind: ${kind}`);
+  return REMINDER_CONFIG[kind];
+}
+
+function syncReminderCustomField(kind) {
+  const config = reminderConfig(kind);
+  const custom = $(config.select).value === "__custom__";
+  const field = $(config.field);
+  field.classList.toggle("hidden", !custom);
+  if (custom) field.removeAttribute("aria-hidden");
+  else field.setAttribute("aria-hidden", "true");
+}
+
+function writeReminderControls(kind, minutes) {
+  const config = reminderConfig(kind);
+  const select = $(config.select);
+  const numeric = Number(minutes);
+  const preset = Number.isFinite(numeric) && config.presets.includes(numeric);
+  select.value = preset ? String(numeric) : "__custom__";
+  $(config.custom).value = preset ? "" : String(minutes ?? "");
+  $(config.custom).setCustomValidity("");
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  syncReminderCustomField(kind);
+}
+
+function readReminderControls(kind) {
+  const config = reminderConfig(kind);
+  const select = $(config.select);
+  if (select.value !== "__custom__") {
+    $(config.custom).setCustomValidity("");
+    return Number(select.value);
+  }
+  const input = $(config.custom);
+  const raw = input.value.trim();
+  const valid = /^\d+$/.test(raw) && Number(raw) > 0;
+  input.setCustomValidity(valid ? "" : "请输入大于 0 的整数分钟数");
+  if (!valid) { input.focus(); showToast("请输入大于 0 的整数分钟数"); return null; }
+  return Number(raw);
+}
+
+function inferScheduleMode(task = {}) {
+  if (task.type === "event") return "event";
+  if (TASK_TYPES.includes(task.type)) return "deadline";
+  const hasEventSchedule = [task.startDate, task.startTime, task.endDate, task.endTime, task.location].some(Boolean);
+  const hasDeadlineSchedule = [task.due, task.dueTime].some(Boolean);
+  return hasEventSchedule && !hasDeadlineSchedule ? "event" : "deadline";
+}
+
+function renderTaskScheduleFields() {
+  const select = $("#taskType");
+  const mode = inferScheduleMode({ type: select.value, startDate: $("#taskStartDate").value, startTime: $("#taskStartTime").value, endDate: $("#taskEndDate").value, endTime: $("#taskEndTime").value, location: $("#taskLocation").value, due: $("#taskDue").value, dueTime: $("#taskDueTime").value });
+  const visible = new Set(mode === "event" ? ["start", "end", "location"] : ["due"]);
+  for (const group of $$('[data-schedule-group]', $("#taskForm"))) {
+    const isVisible = visible.has(group.dataset.scheduleGroup);
+    if (!isVisible && group.contains(document.activeElement)) {
+      const target = mode === "event" ? '[data-schedule-group="start"] input' : '[data-schedule-group="due"] input';
+      $(target)?.focus();
+    }
+    group.hidden = !isVisible;
+    if (isVisible) group.removeAttribute("aria-hidden");
+    else group.setAttribute("aria-hidden", "true");
+  }
+  const field = select.closest(".field");
+  field?.querySelector("[data-legacy-type-hint]")?.remove();
+  if (!TASK_TYPES.includes(select.value)) {
+    const hint = document.createElement("small");
+    hint.className = "field-hint";
+    hint.dataset.legacyTypeHint = "true";
+    hint.textContent = "旧事项类型；选择新类型后才会转换时间字段。";
+    field?.append(hint);
+  }
+}
+
+function scheduleCachesFromRecord(record = {}) {
+  return {
+    event: { startDate: record.startDate || "", startTime: record.startTime || "", endDate: record.endDate || "", endTime: record.endTime || "", location: record.location || "" },
+    deadline: { due: record.due || "", dueTime: record.dueTime || "" },
+  };
+}
+
+function migrateScheduleCache(fromMode, toMode, caches) {
+  const next = {
+    event: { ...caches.event },
+    deadline: { ...caches.deadline },
+  };
+  if (fromMode === toMode) return next;
+  if (fromMode === "deadline" && toMode === "event" && Object.values(next.event).every((value) => value === "")) {
+    next.event.startDate = next.deadline.due;
+    next.event.startTime = next.deadline.dueTime;
+    next.event.endDate = next.deadline.due;
+    next.event.endTime = "";
+    next.event.location = "";
+  }
+  if (fromMode === "event" && toMode === "deadline" && Object.values(next.deadline).every((value) => value === "")) {
+    next.deadline.due = next.event.startDate;
+    next.deadline.dueTime = next.event.startTime;
+  }
+  return next;
+}
+
+function schedulePatchForMode(mode, caches) {
+  return mode === "event"
+    ? { ...caches.event, due: "", dueTime: "" }
+    : { startDate: "", startTime: "", endDate: "", endTime: "", location: "", ...caches.deadline };
+}
+
+function readTaskScheduleCache(mode) {
+  return mode === "event"
+    ? { startDate: $("#taskStartDate").value, startTime: $("#taskStartTime").value, endDate: $("#taskEndDate").value, endTime: $("#taskEndTime").value, location: $("#taskLocation").value }
+    : { due: $("#taskDue").value, dueTime: $("#taskDueTime").value };
+}
+
+function writeTaskScheduleCache(mode, cache) {
+  if (mode === "event") {
+    $("#taskStartDate").value = cache.startDate;
+    $("#taskStartTime").value = cache.startTime;
+    $("#taskEndDate").value = cache.endDate;
+    $("#taskEndTime").value = cache.endTime;
+    $("#taskLocation").value = cache.location;
+  } else {
+    $("#taskDue").value = cache.due;
+    $("#taskDueTime").value = cache.dueTime;
+  }
+}
+
+function handleTaskTypeChange() {
+  if (!taskModalScheduleState) return renderTaskScheduleFields();
+  const fromMode = taskModalScheduleState.mode;
+  taskModalScheduleState.caches[fromMode] = readTaskScheduleCache(fromMode);
+  const toMode = deadlineType($("#taskType").value) ? "deadline" : "event";
+  taskModalScheduleState.caches = migrateScheduleCache(fromMode, toMode, taskModalScheduleState.caches);
+  taskModalScheduleState.mode = toMode;
+  writeTaskScheduleCache(toMode, taskModalScheduleState.caches[toMode]);
+  renderTaskScheduleFields();
+}
+
 function openTaskModal(taskId = "", presetQuadrant = null, preset = {}) {
   const task = data.tasks.find((item) => item.id === taskId);
   $("#taskForm").reset();
+  const type = task?.type || preset.type || "task";
+  const typeSelect = $("#taskType");
+  typeSelect.querySelectorAll("option[data-legacy-type]").forEach((option) => option.remove());
+  if (!TASK_TYPES.includes(type)) {
+    const option = new Option(`旧类型（${type}）`, type);
+    option.dataset.legacyType = type;
+    typeSelect.append(option);
+  }
   $("#taskId").value = task?.id || "";
   $("#taskTitle").value = task?.title || "";
   $("#taskNotes").value = task?.notes || "";
@@ -2356,10 +2612,10 @@ function openTaskModal(taskId = "", presetQuadrant = null, preset = {}) {
   $("#taskEndDate").value = task?.endDate || preset.endDate || "";
   $("#taskEndTime").value = task?.endTime || preset.endTime || "";
   $("#taskLocation").value = task?.location || preset.location || "";
-  $("#taskReminder").value = String(task?.reminderMinutes ?? preset.reminderMinutes ?? -1);
+  writeReminderControls("task", task?.reminderMinutes ?? preset.reminderMinutes ?? -1);
   $("#taskAlarmMode").checked = Boolean(task?.alarmMode || preset.alarmMode);
   $("#taskEstimate").value = task?.estimateMinutes || preset.estimateMinutes || "";
-  $("#taskType").value = task?.type || preset.type || "task";
+  typeSelect.value = type;
   $("#taskRepeat").value = task?.repeat || preset.repeat || "none";
   renderProjectOptions();
   $("#taskProject").value = task?.projectId || preset.projectId || "";
@@ -2368,13 +2624,20 @@ function openTaskModal(taskId = "", presetQuadrant = null, preset = {}) {
   $("#taskTitle").value = task?.title || preset.title || "";
   $("#taskNotes").value = task?.notes || preset.notes || "";
   $("#taskToday").checked = Boolean(task?.today || preset.today);
+  taskModalScheduleState = {
+    originalType: type,
+    originalSchedule: scheduleCachesFromRecord(task || preset),
+    mode: inferScheduleMode({ ...(task || preset), type }),
+    caches: scheduleCachesFromRecord(task || preset),
+  };
+  renderTaskScheduleFields();
   taskDecision = task ? { important: task.important, urgent: task.urgent } : preset.important !== undefined ? { important: preset.important ?? null, urgent: preset.urgent ?? null } : decisionForQuadrant(presetQuadrant);
   $("#modalEyebrow").textContent = task ? "编辑事项" : "新建事项";
   $("#modalTitle").textContent = task ? "调整下一步行动" : "把想法变成行动";
   $("#deleteTaskBtn").classList.toggle("hidden", !task);
   updateDecisionUI();
   const modal = $("#taskModal");
-  modal.showModal();
+  openDialog(modal);
   const initialFocus = document.activeElement;
   const autofocus = new AbortController();
   const cancelAutofocus = () => autofocus.abort();
@@ -2391,20 +2654,27 @@ function saveTask(event) {
   event.preventDefault();
   const id = $("#taskId").value;
   const existing = data.tasks.find((task) => task.id === id);
+  const selectedType = $("#taskType").value;
+  const scheduleState = taskModalScheduleState;
+  const mode = scheduleState?.mode || (deadlineType(selectedType) ? "deadline" : "event");
+  if (scheduleState) scheduleState.caches[mode] = readTaskScheduleCache(mode);
+  const caches = scheduleState?.caches || scheduleCachesFromRecord(existing || {});
+  const originalType = scheduleState?.originalType ?? existing?.type ?? selectedType;
+  const unchangedType = Boolean(existing && selectedType === originalType);
+  const scheduleValues = unchangedType
+    ? mode === "event"
+      ? { ...caches.event, ...scheduleState.originalSchedule.deadline }
+      : { ...scheduleState.originalSchedule.event, ...caches.deadline }
+    : schedulePatchForMode(mode, caches);
   const values = {
     title: $("#taskTitle").value.trim(),
     notes: $("#taskNotes").value.trim(),
-    due: $("#taskDue").value,
-    dueTime: $("#taskDueTime").value,
-    startDate: $("#taskStartDate").value,
-    startTime: $("#taskStartTime").value,
-    endDate: $("#taskEndDate").value,
-    endTime: $("#taskEndTime").value,
-    location: $("#taskLocation").value.trim(),
-    reminderMinutes: Number($("#taskReminder").value),
-    alarmMode: $("#taskAlarmMode").checked && Number($("#taskReminder").value) >= 0,
+    ...scheduleValues,
+    location: scheduleValues.location?.trim() || "",
+    reminderMinutes: readReminderControls("task"),
+    alarmMode: $("#taskAlarmMode").checked,
     estimateMinutes: Math.max(0, Number($("#taskEstimate").value) || 0),
-    type: $("#taskType").value,
+    type: selectedType,
     repeat: $("#taskRepeat").value,
     courseId: $("#taskCourse").value,
     projectId: $("#taskProject").value,
@@ -2414,11 +2684,22 @@ function saveTask(event) {
     today: $("#taskToday").checked,
   };
   if (!values.title) return;
-  if (values.startDate && values.startTime && values.endDate && values.endTime && new Date(`${values.endDate}T${values.endTime}`) < new Date(`${values.startDate}T${values.startTime}`)) return showToast("结束时间不能早于开始时间");
+  if (values.reminderMinutes === null) return;
+  values.alarmMode = $("#taskAlarmMode").checked && values.reminderMinutes >= 0;
+  if (values.startDate && values.startTime && values.endDate && values.endTime && new Date(`${values.endDate}T${values.endTime}`) <= new Date(`${values.startDate}T${values.startTime}`)) return showToast("结束时间必须晚于开始时间");
+  let createdTask = null;
   if (existing) Object.assign(existing, values, { updatedAt: Date.now() });
-  else data.tasks.unshift({ id: uid(), ...values, completed: false, createdAt: Date.now(), updatedAt: Date.now() });
-  $("#taskModal").close();
+  else {
+    createdTask = { id: uid(), ...values, completed: false, createdAt: Date.now(), updatedAt: Date.now() };
+    data.tasks.unshift(createdTask);
+  }
   saveData();
+  if (createdTask) {
+    recentlyCreatedTaskId = createdTask.id;
+    renderAll();
+  }
+  closeDialog($("#taskModal"));
+  taskModalScheduleState = null;
   showToast(existing ? "事项已更新" : values.quadrant ? `已添加到“${quadrantInfo[values.quadrant].name}”` : "已保存到收集箱");
 }
 
@@ -2426,7 +2707,7 @@ function deleteTask() {
   const id = $("#taskId").value;
   if (!id || !confirm("确定删除这件事项吗？")) return;
   data.tasks = data.tasks.filter((task) => task.id !== id);
-  $("#taskModal").close();
+  closeDialog($("#taskModal"));
   saveData();
   showToast("事项已删除");
 }
@@ -2502,7 +2783,7 @@ function openProjectModal(projectId = "") {
   $("#projectActions").value = "";
   $("#projectEyebrow").textContent = project ? "编辑项目" : "新建项目";
   $("#deleteProjectBtn").classList.toggle("hidden", !project);
-  $("#projectModal").showModal();
+  openDialog($("#projectModal"));
   setTimeout(() => $("#projectName").focus(), 40);
 }
 
@@ -2531,7 +2812,7 @@ function saveProject(event) {
     const duplicate = data.tasks.some((task) => task.projectId === existing.id && !task.completed && task.title === action.title && task.due === action.due);
     if (!duplicate) data.tasks.unshift({ id: uid(), title: action.title, notes: "", due: action.due, dueTime: "", reminderMinutes: -1, projectId: existing.id, courseId: "", type: "task", repeat: "none", important: true, urgent: false, quadrant: "q2", today: false, completed: false, createdAt: Date.now() });
   });
-  $("#projectModal").close();
+  closeDialog($("#projectModal"));
   saveData();
   showToast(wasExisting ? `项目已更新${actions.length ? `，新增 ${actions.length} 项行动` : ""}` : `项目已建立：${milestoneLines.length} 个里程碑，${actions.length} 项行动`);
 }
@@ -2541,7 +2822,7 @@ function deleteProject() {
   if (!id || !confirm("删除项目后，项目内的任务会保留但不再归属项目。确定继续吗？")) return;
   data.projects = data.projects.filter((project) => project.id !== id);
   data.tasks.forEach((task) => { if (task.projectId === id) task.projectId = ""; });
-  $("#projectModal").close();
+  closeDialog($("#projectModal"));
   saveData();
   showToast("项目已删除，原有任务已保留");
 }
@@ -2565,7 +2846,7 @@ function submitQuickTask(event) {
   });
   $("#smartCaptureSource").textContent = source;
   renderSmartCapturePreview();
-  $("#smartCaptureModal").showModal();
+  openDialog($("#smartCaptureModal"));
 }
 
 function smartDraftMeta(draft) {
@@ -2594,32 +2875,38 @@ function renderSmartCapturePreview() {
   const quadrantOptions = Object.entries(quadrantInfo).map(([value, info]) => `<option value="${value}">${escapeHTML(info.name)}</option>`).join("");
   const courseOptions = data.courses.map((course) => `<option value="${course.id}">${escapeHTML(course.name)}</option>`).join("");
   const projectOptions = data.projects.map((project) => `<option value="${project.id}">${escapeHTML(project.name)}</option>`).join("");
+  smartDrafts.forEach((draft) => { if (draft.kind === "task" && !smartScheduleCaches.has(draft)) smartScheduleCaches.set(draft, scheduleCachesFromRecord(draft)); });
   $("#smartCapturePreview").innerHTML = smartDrafts.map((draft, index) => {
     const issues = draft.issues || [];
     const status = issues.length ? `${issues.length} 项待确认` : "可直接添加";
     const commonHeader = `<header><span>${labels[draft.kind] || "内容"}</span><em class="${issues.length ? "uncertain" : "resolved"}">${status}</em></header>${draft.timeSuggestion ? `<p class="smart-time-suggestion">建议安排：${escapeHTML(draft.startDate || draft.due || "")} ${escapeHTML(draft.startTime || draft.dueTime || "")}。原文“${escapeHTML(draft.timeSuggestion.label)}”${draft.timeSuggestion.rangeEnd && draft.timeSuggestion.rangeEnd !== draft.timeSuggestion.rangeStart ? `涵盖 ${escapeHTML(draft.timeSuggestion.rangeStart)} 至 ${escapeHTML(draft.timeSuggestion.rangeEnd)}` : "没有指定精确时刻"}，可修改，确认添加即采用建议。</p>` : ""}${draft.originalText ? `<details class="smart-original"><summary>查看原文 / 恢复标题</summary><p>${escapeHTML(draft.originalText)}</p><button type="button" class="secondary-button" data-smart-original="${index}">用原文作标题</button></details>` : ""}`;
     if (draft.kind === "task") {
       const quadrant = classify(draft.important, draft.urgent) || "";
-      const isEvent = draft.type === "event";
       const typeOptions = Object.entries(taskTypeLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
       return `<article class="smart-preview-card ${issues.length ? "has-issues" : ""}" data-smart-index="${index}">${commonHeader}<div class="smart-field-grid">
         <label class="smart-field wide"><span>事项</span><input data-smart-field="title" value="${escapeHTML(draft.title)}" /></label>
+        <label class="smart-field wide"><span>备注</span><textarea data-smart-field="notes" rows="2">${escapeHTML(draft.notes || "")}</textarea></label>
         <label class="smart-field"><span>类型</span><select data-smart-field="type">${typeOptions}</select></label>
-        ${isEvent ? `<label class="smart-field"><span>开始日期</span><input type="date" data-smart-field="startDate" value="${escapeHTML(draft.startDate || "")}" /></label><label class="smart-field"><span>开始时间</span><input type="time" data-smart-field="startTime" value="${escapeHTML(draft.startTime || "")}" /></label><label class="smart-field"><span>结束日期</span><input type="date" data-smart-field="endDate" value="${escapeHTML(draft.endDate || draft.startDate || "")}" /></label><label class="smart-field"><span>结束时间</span><input type="time" data-smart-field="endTime" value="${escapeHTML(draft.endTime || "")}" /></label><label class="smart-field"><span>地点</span><input data-smart-field="location" value="${escapeHTML(draft.location || "")}" placeholder="教室、会议室或地址" /></label>` : `<label class="smart-field"><span>日期 / DDL</span><input type="date" data-smart-field="due" value="${escapeHTML(draft.due || "")}" /></label><label class="smart-field"><span>时间</span><input type="time" data-smart-field="dueTime" value="${escapeHTML(draft.dueTime || "")}" /></label>`}
+        ${draft.type === "event" ? `<label class="smart-field"><span>开始日期</span><input type="date" data-smart-field="startDate" value="${escapeHTML(draft.startDate || "")}" /></label><label class="smart-field"><span>开始时间</span><input type="time" data-smart-field="startTime" value="${escapeHTML(draft.startTime || "")}" /></label><label class="smart-field"><span>结束日期</span><input type="date" data-smart-field="endDate" value="${escapeHTML(draft.endDate || draft.startDate || "")}" /></label><label class="smart-field"><span>结束时间</span><input type="time" data-smart-field="endTime" value="${escapeHTML(draft.endTime || "")}" /></label><label class="smart-field"><span>地点</span><input data-smart-field="location" value="${escapeHTML(draft.location || "")}" placeholder="教室、会议室或地址" /></label>` : `<label class="smart-field"><span>日期 / DDL</span><input type="date" data-smart-field="due" value="${escapeHTML(draft.due || "")}" /></label><label class="smart-field"><span>时间</span><input type="time" data-smart-field="dueTime" value="${escapeHTML(draft.dueTime || "")}" /></label>`}
         <label class="smart-field"><span>优先级</span><select data-smart-field="quadrant"><option value="">待确认</option>${quadrantOptions}</select></label>
         <label class="smart-field"><span>预计时长</span><input type="number" min="0" step="5" data-smart-field="estimateMinutes" value="${draft.estimateMinutes || ""}" placeholder="分钟" /></label>
+        <label class="smart-field"><span>提醒分钟（-1=不提醒）</span><input type="number" min="-1" step="1" data-smart-field="reminderMinutes" value="${Number.isInteger(draft.reminderMinutes) ? draft.reminderMinutes : -1}" /></label>
+        <label class="smart-field"><span>重复</span><select data-smart-field="repeat"><option value="none">不重复</option><option value="daily">每天</option><option value="weekdays">每个工作日</option><option value="weekly">每周</option><option value="monthly">每月</option></select></label>
         <label class="smart-field"><span>关联课程</span><select data-smart-field="courseId"><option value="">无课程</option>${courseOptions}</select></label>
         <label class="smart-field"><span>关联项目</span><select data-smart-field="projectId"><option value="">无项目</option>${projectOptions}</select></label>
-      </div><div class="smart-preview-meta">${smartDraftMeta(draft).map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>${issues.length ? `<ul class="smart-issue-list">${issues.map((issue) => `<li>${escapeHTML(issue.message)}</li>`).join("")}</ul>` : ""}<script type="application/json" class="smart-selected-values">${JSON.stringify({ type: draft.type || "task", quadrant, courseId: draft.courseId || "", projectId: draft.projectId || "" }).replace(/</g, "\\u003c")}</script></article>`;
+        <label class="smart-field"><span>今天</span><input type="checkbox" data-smart-field="today" ${draft.today ? "checked" : ""} /></label>
+      </div><div class="smart-preview-meta">${smartDraftMeta(draft).map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>${issues.length ? `<ul class="smart-issue-list">${issues.map((issue) => `<li>${escapeHTML(issue.message)}</li>`).join("")}</ul>` : ""}<script type="application/json" class="smart-selected-values">${JSON.stringify({ type: draft.type || "task", quadrant, courseId: draft.courseId || "", projectId: draft.projectId || "", repeat: draft.repeat || "none" }).replace(/</g, "\\u003c")}</script></article>`;
     }
     if (draft.kind === "project") return `<article class="smart-preview-card ${issues.length ? "has-issues" : ""}" data-smart-index="${index}">${commonHeader}<div class="smart-field-grid"><label class="smart-field wide"><span>项目名称</span><input data-smart-field="name" value="${escapeHTML(draft.name)}" /></label><label class="smart-field"><span>目标日期</span><input type="date" data-smart-field="due" value="${escapeHTML(draft.due || "")}" /></label><label class="smart-field wide"><span>第一项行动</span><input data-smart-field="nextAction" value="${escapeHTML(draft.nextAction || "")}" placeholder="写成一个能直接开始的动作" /></label></div>${issues.length ? `<ul class="smart-issue-list">${issues.map((issue) => `<li>${escapeHTML(issue.message)}</li>`).join("")}</ul>` : ""}</article>`;
-    return `<article class="smart-preview-card ${issues.length ? "has-issues" : ""}" data-smart-index="${index}">${commonHeader}<div class="smart-field-grid"><label class="smart-field wide"><span>课程名称</span><input data-smart-field="name" value="${escapeHTML(draft.name)}" /></label><label class="smart-field"><span>星期</span><select data-smart-field="day">${[1,2,3,4,5,6,7].map((day) => `<option value="${day}" ${day === draft.day ? "selected" : ""}>周${"一二三四五六日"[day - 1]}</option>`).join("")}</select></label><label class="smart-field"><span>开始节次</span><input type="number" min="1" data-smart-field="startSection" value="${draft.startSection}" /></label><label class="smart-field"><span>结束节次</span><input type="number" min="1" data-smart-field="endSection" value="${draft.endSection}" /></label></div><div class="smart-preview-meta">${smartDraftMeta(draft).map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>${issues.length ? `<ul class="smart-issue-list">${issues.map((issue) => `<li>${escapeHTML(issue.message)}</li>`).join("")}</ul>` : ""}</article>`;
+    return `<article class="smart-preview-card ${issues.length ? "has-issues" : ""}" data-smart-index="${index}">${commonHeader}<div class="smart-field-grid"><label class="smart-field wide"><span>课程名称</span><input data-smart-field="name" value="${escapeHTML(draft.name)}" /></label><label class="smart-field"><span>星期</span><select data-smart-field="day">${[1,2,3,4,5,6,7].map((day) => `<option value="${day}" ${day === draft.day ? "selected" : ""}>周${"一二三四五六日"[day - 1]}</option>`).join("")}</select></label><label class="smart-field"><span>开始节次</span><input type="number" min="1" data-smart-field="startSection" value="${draft.startSection}" /></label><label class="smart-field"><span>结束节次</span><input type="number" min="1" data-smart-field="endSection" value="${draft.endSection}" /></label><label class="smart-field"><span>提醒分钟</span><input type="number" min="-1" step="1" data-smart-field="reminderMinutes" value="${Number.isInteger(draft.reminderMinutes) ? draft.reminderMinutes : -1}" /></label></div><div class="smart-preview-meta">${smartDraftMeta(draft).map((item) => `<span>${escapeHTML(item)}</span>`).join("")}</div>${issues.length ? `<ul class="smart-issue-list">${issues.map((issue) => `<li>${escapeHTML(issue.message)}</li>`).join("")}</ul>` : ""}</article>`;
   }).join("");
   $$(".smart-preview-card[data-smart-index]").forEach((card) => {
     const values = $(".smart-selected-values", card);
     if (!values) return;
     const selected = JSON.parse(values.textContent);
     Object.entries(selected).forEach(([field, value]) => { const control = $(`[data-smart-field="${field}"]`, card); if (control) control.value = value; });
+    const repeat = $("[data-smart-field=repeat]", card);
+    if (repeat) repeat.value = smartDrafts[Number(card.dataset.smartIndex)].repeat || "none";
   });
   const unresolved = smartDrafts.flatMap((draft) => draft.issues || []);
   $("#smartCaptureIssues").classList.toggle("hidden", !unresolved.length);
@@ -2637,7 +2924,9 @@ function updateSmartDraftField(event) {
   const previousValue = draft[field];
   if (field === "quadrant") {
     Object.assign(draft, decisionForQuadrant(control.value));
-  } else if (["day", "startSection", "endSection", "estimateMinutes"].includes(field)) draft[field] = Math.max(0, Number(control.value) || 0);
+  } else if (control.type === "checkbox") draft[field] = control.checked;
+  else if (["day", "startSection", "endSection", "estimateMinutes"].includes(field)) draft[field] = Math.max(0, Number(control.value) || 0);
+  else if (field === "reminderMinutes") draft[field] = /^-?\d+$/.test(control.value.trim()) ? Number(control.value) : NaN;
   else draft[field] = control.value.trim();
   if (field === "title") draft.title = control.value.trim();
   if (field === "name") { draft.name = control.value.trim(); draft.title = draft.name; }
@@ -2647,65 +2936,87 @@ function updateSmartDraftField(event) {
     if (endDateInput) endDateInput.value = draft.endDate;
   }
   if (field === "type") {
-    if (draft.type === "event" && !draft.startDate && draft.due) { draft.startDate = draft.due; draft.startTime = draft.dueTime; draft.due = ""; draft.dueTime = ""; }
-    if (draft.type !== "event" && !draft.due && draft.startDate) { draft.due = draft.startDate; draft.dueTime = draft.startTime; }
+    const fromMode = previousValue === "event" ? "event" : "deadline";
+    const toMode = deadlineType(draft.type) ? "deadline" : "event";
+    const current = smartScheduleCaches.get(draft) || scheduleCachesFromRecord(draft);
+    current[fromMode] = scheduleCachesFromRecord(draft)[fromMode];
+    const migrated = migrateScheduleCache(fromMode, toMode, current);
+    smartScheduleCaches.set(draft, migrated);
+    Object.assign(draft, migrated[toMode]);
   }
   const issueField = ["startSection", "endSection"].includes(field) ? "section" : field;
   const resolved = field === "quadrant" ? Boolean(control.value) : Boolean(control.value);
   if (resolved) draft.issues = (draft.issues || []).filter((issue) => issue.field !== issueField);
   draft.confidence = draft.issues?.length ? "needs-confirmation" : "high";
-  if (field === "type") renderSmartCapturePreview();
+  if (field === "type") {
+    const index = card.dataset.smartIndex;
+    renderSmartCapturePreview();
+    $(`[data-smart-index="${index}"] [data-smart-field="type"]`)?.focus();
+  }
 }
 
-function addSmartDraft(draft) {
+function addSmartDraft(draft, target) {
+  if (!target) throw new Error("缺少智能批量提交目标");
   if (draft.kind === "course") {
     if (!slotByNumber(draft.startSection) || !slotByNumber(draft.endSection)) throw new Error(`课表还没有第 ${draft.endSection} 节，请先在学期设置中应用 13 节模板`);
-    data.courses.push({ id: uid(), name: draft.name, code: draft.code || "", campus: draft.campus || "", teacher: draft.teacher || "", location: draft.location || "", day: draft.day, startSection: draft.startSection, endSection: draft.endSection, color: intelligentCourseColor(draft), colorAuto: true, weeks: draft.weeks, reminderMinutes: draft.reminderMinutes ?? 10, notes: draft.notes || "", createdAt: Date.now() });
+    target.courses.push({ id: uid(), name: draft.name, code: draft.code || "", campus: draft.campus || "", teacher: draft.teacher || "", location: draft.location || "", day: draft.day, startSection: draft.startSection, endSection: draft.endSection, color: intelligentCourseColor(draft), colorAuto: true, weeks: draft.weeks, reminderMinutes: draft.reminderMinutes ?? 10, notes: draft.notes || "", createdAt: Date.now() });
     return;
   }
   if (draft.kind === "project") {
     const project = { id: uid(), name: draft.name, goal: draft.goal || "", startDate: localISO(), due: draft.due || "", color: draft.color || "sage", milestones: [], nextActionTaskId: "", createdAt: Date.now() };
-    data.projects.unshift(project);
+    target.projects.unshift(project);
     if (draft.nextAction) {
       const task = { id: uid(), title: draft.nextAction, notes: "", due: "", dueTime: "", reminderMinutes: -1, projectId: project.id, courseId: "", type: "task", repeat: "none", important: true, urgent: false, quadrant: "q2", today: false, completed: false, createdAt: Date.now() };
       project.nextActionTaskId = task.id;
-      data.tasks.unshift(task);
+      target.tasks.unshift(task);
     }
     return;
   }
   const confirmationIssues = (draft.issues || []).filter((issue) => issue.field !== "timeSuggestion");
-  draft.notes = draft.originalText ? [draft.notes, "原始输入：" + draft.originalText, draft.timeSuggestion ? "模糊时间：" + draft.timeSuggestion.label + "（已确认建议或修改后的时间）" : ""].filter(Boolean).join("\n") : draft.notes;
+  const notes = draft.originalText ? [draft.notes, "原始输入：" + draft.originalText, draft.timeSuggestion ? "模糊时间：" + draft.timeSuggestion.label + "（已确认建议或修改后的时间）" : ""].filter(Boolean).join("\n") : draft.notes;
   const quadrant = confirmationIssues.length ? null : classify(draft.important ?? null, draft.urgent ?? null);
-  data.tasks.unshift({ id: uid(), title: draft.title, notes: draft.notes || "", location: draft.location || "", originalText: draft.originalText || "", timeSuggestion: draft.timeSuggestion || null, due: draft.due || "", dueTime: draft.dueTime || "", startDate: draft.startDate || "", startTime: draft.startTime || "", endDate: draft.endDate || "", endTime: draft.endTime || "", reminderMinutes: draft.reminderMinutes ?? -1, estimateMinutes: draft.estimateMinutes || 0, projectId: draft.projectId || "", courseId: draft.courseId || "", type: draft.type || "task", repeat: draft.repeat || "none", important: draft.important ?? null, urgent: draft.urgent ?? null, quadrant, today: Boolean(draft.today), source: "natural-language", confirmationIssues, completed: false, createdAt: Date.now() });
+  target.tasks.unshift({ id: uid(), title: draft.title, notes: notes || "", location: draft.location || "", originalText: draft.originalText || "", timeSuggestion: draft.timeSuggestion || null, due: draft.due || "", dueTime: draft.dueTime || "", startDate: draft.startDate || "", startTime: draft.startTime || "", endDate: draft.endDate || "", endTime: draft.endTime || "", reminderMinutes: draft.reminderMinutes ?? -1, estimateMinutes: draft.estimateMinutes || 0, projectId: draft.projectId || "", courseId: draft.courseId || "", type: draft.type || "task", repeat: draft.repeat || "none", important: draft.important ?? null, urgent: draft.urgent ?? null, quadrant, today: Boolean(draft.today), source: "natural-language", confirmationIssues, completed: false, createdAt: Date.now() });
 }
 
 function confirmSmartCapture(event) {
   event.preventDefault();
   if (smartDrafts.some((draft) => !String(draft.title || draft.name || "").trim())) return showToast("请填写事项标题");
   const invalidEnd = smartDrafts.some((draft) => draft.startDate && draft.startTime && draft.endTime && new Date((draft.endDate || draft.startDate) + "T" + draft.endTime) <= new Date(draft.startDate + "T" + draft.startTime));
-  if (invalidEnd) return showToast("结束时间需要晚于开始时间，跨天日程请调整结束日期");
+  if (invalidEnd) return showToast("结束时间必须晚于开始时间");
+  const invalidReminder = smartDrafts.find((draft) => ["task", "course"].includes(draft.kind) && (!Number.isInteger(draft.reminderMinutes) || draft.reminderMinutes < -1));
+  if (invalidReminder) return showToast("智能预览中的提醒分钟必须是大于等于 -1 的整数");
   const unavailableCourse = smartDrafts.find((draft) => draft.kind === "course" && (!slotByNumber(draft.startSection) || !slotByNumber(draft.endSection)));
   if (unavailableCourse) return showToast(`课表还没有第 ${unavailableCourse.endSection} 节，请先在学期设置中应用 13 节模板`);
+  smartDrafts.forEach((draft) => {
+    if (draft.kind !== "task") return;
+    const mode = deadlineType(draft.type) ? "deadline" : "event";
+    const caches = smartScheduleCaches.get(draft) || scheduleCachesFromRecord(draft);
+    Object.assign(draft, schedulePatchForMode(mode, caches));
+  });
+  const target = { tasks: [...data.tasks], projects: [...data.projects], courses: [...data.courses] };
   try {
-    smartDrafts.forEach(addSmartDraft);
+    smartDrafts.forEach((draft) => addSmartDraft(draft, target));
   } catch (error) {
     return showToast(error.message);
   }
+  data.tasks = target.tasks;
+  data.projects = target.projects;
+  data.courses = target.courses;
   const count = smartDrafts.length;
-  $("#smartCaptureModal").close();
+  saveData();
+  closeDialog($("#smartCaptureModal"));
   $("#quickInput").value = "";
   $("#mobileCaptureInput").value = "";
   smartDrafts = [];
   quickDecision = { important: false, urgent: false, touched: false };
   updateQuickButtons();
-  saveData();
   showToast(count > 1 ? `已智能添加 ${count} 项` : "已按识别结果添加");
 }
 
 function editSmartCapture() {
   const draft = smartDrafts[0];
   if (!draft) return;
-  $("#smartCaptureModal").close();
+  closeDialog($("#smartCaptureModal"));
   if (draft.kind === "task") {
     openTaskModal("", null, { ...draft, notes: [draft.notes, draft.originalText ? "原始输入：" + draft.originalText : ""].filter(Boolean).join("\n") });
     return;
@@ -2726,7 +3037,7 @@ function editSmartCapture() {
   $("#courseDay").value = String(draft.day);
   renderSectionOptions(draft.startSection, draft.endSection);
   $("#courseWeeks").value = formatWeeks(draft.weeks);
-  $("#courseReminder").value = String(draft.reminderMinutes ?? 10);
+  writeReminderControls("course", draft.reminderMinutes ?? 10);
 }
 
 function updateQuickButtons() {
@@ -2764,7 +3075,7 @@ function openCourseModal(courseId = "") {
   $("#courseLink").value = course?.link || "";
   $("#courseDay").value = course?.day || Math.min(new Date().getDay() || 7, data.semester.showWeekend ? 7 : 5);
   $("#courseColor").value = course?.colorAuto === false ? vividCourseColor(course.color, data.courses.length) : "auto";
-  $("#courseReminder").value = String(course?.reminderMinutes ?? 10);
+  writeReminderControls("course", course?.reminderMinutes ?? 10);
   $("#courseAlarmMode").checked = Boolean(course?.alarmMode);
   renderSectionOptions(course?.startSection || data.timeSlots[0]?.number || 1, course?.endSection || data.timeSlots[0]?.number || 1);
   $("#courseWeeks").value = course ? formatWeeks(course.weeks) : `1-${data.semester.totalWeeks}`;
@@ -2778,7 +3089,7 @@ function openCourseModal(courseId = "") {
   const exception = course ? exceptionForWeek(course, displayedWeek) : null;
   $("#cancelOccurrenceBtn").textContent = exception?.type === "cancel" ? "恢复本周上课" : "本周停课";
   $("#rescheduleOccurrenceBtn").textContent = exception?.type === "reschedule" ? "恢复原时间" : "本周调课";
-  $("#courseModal").showModal();
+  openDialog($("#courseModal"));
   setTimeout(() => $("#courseName").focus(), 40);
 }
 
@@ -2805,22 +3116,24 @@ function saveCourse(event) {
     color: $("#courseColor").value === "auto" ? intelligentCourseColor({ name: $("#courseName").value.trim(), code: $("#courseCode").value.trim() }) : $("#courseColor").value,
     colorAuto: $("#courseColor").value === "auto",
     weeks,
-    reminderMinutes: Number($("#courseReminder").value),
-    alarmMode: $("#courseAlarmMode").checked && Number($("#courseReminder").value) >= 0,
+    reminderMinutes: readReminderControls("course"),
+    alarmMode: $("#courseAlarmMode").checked,
     notes: $("#courseNotes").value.trim(),
   };
   if (!values.name) return;
+  if (values.reminderMinutes === null) return;
+  values.alarmMode = $("#courseAlarmMode").checked && values.reminderMinutes >= 0;
   if (existing) Object.assign(existing, values);
   else data.courses.push({ id: uid(), ...values, createdAt: Date.now() });
-  $("#courseModal").close();
   saveData();
+closeDialog($("#courseModal"));
   showToast(existing ? "课程已更新" : "课程已加入课表");
 }
 
 function duplicateCourseTime() {
   const course = courseById($("#courseId").value);
   if (!course) return;
-  $("#courseModal").close();
+closeDialog($("#courseModal"));
   openCourseModal();
   $("#courseName").value = course.name;
   $("#courseCode").value = course.code || "";
@@ -2830,7 +3143,7 @@ function duplicateCourseTime() {
   $("#courseCredits").value = course.credits || "";
   $("#courseLink").value = course.link || "";
   $("#courseColor").value = course.colorAuto === false ? course.color : "auto";
-  $("#courseReminder").value = String(course.reminderMinutes ?? 10);
+  writeReminderControls("course", course.reminderMinutes ?? 10);
   $("#courseAlarmMode").checked = Boolean(course.alarmMode);
   $("#courseWeeks").value = formatWeeks(course.weeks);
   $("#courseNotes").value = course.notes || "";
@@ -2845,7 +3158,7 @@ function deleteCourse() {
   data.courses = data.courses.filter((item) => item.id !== id);
   data.courseExceptions = data.courseExceptions.filter((item) => item.courseId !== id);
   data.tasks.forEach((task) => { if (task.courseId === id) task.courseId = ""; });
-  $("#courseModal").close();
+closeDialog($("#courseModal"));
   saveData();
   showToast("课程已删除，关联任务已保留");
 }
@@ -2855,7 +3168,7 @@ function createTaskForCourse(type) {
   const course = courseById(courseId);
   if (!course) return;
   const labels = { assignment: "作业：", exam: "考试：", review: "复习：" };
-  $("#courseModal").close();
+closeDialog($("#courseModal"));
   openTaskModal("", "q2", { type, courseId });
   $("#taskTitle").value = `${labels[type]}${course.name}`;
 }
@@ -2873,7 +3186,7 @@ function toggleCurrentOccurrence() {
     data.courseExceptions.push({ id: uid(), courseId: course.id, date, type: "cancel" });
     showToast("本周课程已标记停课");
   }
-  $("#courseModal").close();
+closeDialog($("#courseModal"));
   saveData();
 }
 
@@ -2884,7 +3197,7 @@ function rescheduleCurrentOccurrence() {
   const existingIndex = data.courseExceptions.findIndex((item) => item.courseId === course.id && item.date === date);
   if (existingIndex >= 0 && data.courseExceptions[existingIndex].type === "reschedule") {
     data.courseExceptions.splice(existingIndex, 1);
-    $("#courseModal").close();
+closeDialog($("#courseModal"));
     saveData();
     return showToast("本周课程已恢复原时间");
   }
@@ -2898,7 +3211,7 @@ function rescheduleCurrentOccurrence() {
   if (!slotByNumber(startSection) || !slotByNumber(endSection) || endSection < startSection) return showToast("节次输入无效");
   if (existingIndex >= 0) data.courseExceptions.splice(existingIndex, 1);
   data.courseExceptions.push({ id: uid(), courseId: course.id, date, type: "reschedule", day, startSection, endSection });
-  $("#courseModal").close();
+closeDialog($("#courseModal"));
   saveData();
   showToast("本周调课已保存");
 }
@@ -2938,7 +3251,7 @@ function openCalendarRulesModal() {
   $("#calendarRuleDate").value = localISO();
   $("#calendarUseDayField").classList.add("hidden");
   renderCalendarRules();
-  $("#calendarRulesModal").showModal();
+  openDialog($("#calendarRulesModal"));
 }
 
 function saveCalendarRule(event) {
@@ -2970,7 +3283,7 @@ function openSemesterModal() {
   $("#semesterWeekend").value = String(data.semester.showWeekend);
   semesterDraftSlots = data.timeSlots.map((slot) => ({ ...slot }));
   renderTimeSlotEditor();
-  $("#semesterModal").showModal();
+  openDialog($("#semesterModal"));
 }
 
 function saveSemester(event) {
@@ -2989,7 +3302,7 @@ function saveSemester(event) {
     course.weeks = course.weeks.filter((week) => week <= data.semester.totalWeeks);
   });
   displayedWeek = currentSemesterWeek();
-  $("#semesterModal").close();
+closeDialog($("#semesterModal"));
   saveData();
   showToast("学期设置已保存");
 }
@@ -3074,7 +3387,7 @@ function confirmScheduleImport() {
   data.settings.lastScheduleImportUndo = { batchId: pendingScheduleImport.batchId, snapshot, createdAt: Date.now() };
   const source = pendingScheduleImport.source;
   pendingScheduleImport = null;
-  $("#cloudModal").close();
+closeDialog($("#cloudModal"));
   saveData();
   showToast(`${source} 导入完成：新增 ${added}，合并 ${merged}`);
 }
@@ -3248,16 +3561,13 @@ function icsDateTime(date, time) {
 
 function exportIcs() {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Fangcun//Schedule//ZH", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-TIMEZONE:Asia/Shanghai"];
-  data.courses.forEach((course) => {
-    const startSlot = slotByNumber(course.startSection);
-    const endSlot = slotByNumber(course.endSection);
+  semesterCourseOccurrences().forEach(({ course, occurrence, dateKey, keyDate, record }) => {
+    const startSlot = slotByNumber(occurrence.startSection);
+    const endSlot = slotByNumber(occurrence.endSection);
     if (!startSlot || !endSlot) return;
-    course.weeks.forEach((week) => {
-      const date = addDays(weekStartDate(week), course.day - 1);
-      if (data.courseExceptions.some((item) => item.courseId === course.id && item.date === localISO(date) && item.type === "cancel")) return;
-      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-      lines.push("BEGIN:VEVENT", `UID:${course.id}-${week}@fangcun`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Asia/Shanghai:${icsDateTime(date, startSlot.startTime)}`, `DTEND;TZID=Asia/Shanghai:${icsDateTime(date, endSlot.endTime)}`, `SUMMARY:${icsEscape(course.name)}`, `LOCATION:${icsEscape(coursePlace(course))}`, `DESCRIPTION:${icsEscape([course.code, course.teacher, course.notes].filter(Boolean).join(" · "))}`, "END:VEVENT");
-    });
+    const date = dateFromISO(dateKey);
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    lines.push("BEGIN:VEVENT", `UID:${course.id}-${keyDate}@fangcun`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Asia/Shanghai:${icsDateTime(date, startSlot.startTime)}`, `DTEND;TZID=Asia/Shanghai:${icsDateTime(date, endSlot.endTime)}`, `SUMMARY:${icsEscape(record?.name || course.name)}`, `LOCATION:${icsEscape(record?.location || coursePlace(course))}`, `DESCRIPTION:${icsEscape([course.code, course.teacher, course.notes].filter(Boolean).join(" · "))}`, "END:VEVENT");
   });
   lines.push("END:VCALENDAR");
   downloadFile(lines.join("\r\n"), `方寸课表-${localISO()}.ics`, "text/calendar;charset=utf-8");
@@ -3808,19 +4118,12 @@ function nativeCalendarItems() {
     const key = `task:${task.id}`;
     items.push({ key, kind: "task", nativeId: mapping.nativeIds?.[key] || 0, title: task.due && !task.startDate ? `DDL · ${task.title}` : task.title, description: task.notes || "由方寸双向同步", location: task.location || "", startAt, endAt, allDay, reminderMinutes: task.alarmMode ? -1 : Number(task.reminderMinutes ?? -1) });
   });
-  if (data.semester?.startDate) data.courses.forEach((course) => {
-    (course.weeks || []).forEach((week) => {
-      const originalDate = localISO(addDays(weekStartDate(week), Number(course.day) - 1));
-      const exception = data.courseExceptions.find((item) => item.courseId === course.id && item.date === originalDate);
-      if (exception?.type === "cancel") return;
-      const date = exception?.type === "reschedule" ? (exception.targetDate || (exception.day ? localISO(addDays(weekStartDate(week), Number(exception.day) - 1)) : originalDate)) : originalDate;
-      if (calendarRuleForDate(date)?.type === "holiday") return;
-      const startSlot = slotByNumber(exception?.type === "reschedule" ? exception.startSection : course.startSection);
-      const endSlot = slotByNumber(exception?.type === "reschedule" ? exception.endSection : course.endSection);
-      if (!startSlot || !endSlot) return;
-      const key = `course:${course.id}:${originalDate}`;
-      items.push({ key, kind: "course", nativeId: mapping.nativeIds?.[key] || 0, title: exception?.name || course.name, description: [course.code, course.teacher, course.notes].filter(Boolean).join(" · "), location: exception?.location || coursePlace(course), startAt: epochFor(date, startSlot.startTime), endAt: epochFor(date, endSlot.endTime), allDay: false, reminderMinutes: course.alarmMode ? -1 : Number(course.reminderMinutes ?? -1) });
-    });
+  if (data.semester?.startDate) semesterCourseOccurrences().forEach(({ course, occurrence, dateKey, keyDate, record }) => {
+    const startSlot = slotByNumber(occurrence.startSection);
+    const endSlot = slotByNumber(occurrence.endSection);
+    if (!startSlot || !endSlot) return;
+    const key = `course:${course.id}:${keyDate}`;
+    items.push({ key, kind: "course", nativeId: mapping.nativeIds?.[key] || 0, title: record?.name || course.name, description: [course.code, course.teacher, course.notes].filter(Boolean).join(" · "), location: record?.location || coursePlace(course), startAt: epochFor(dateKey, startSlot.startTime), endAt: epochFor(dateKey, endSlot.endTime), allDay: false, reminderMinutes: course.alarmMode ? -1 : Number(course.reminderMinutes ?? -1) });
   });
   return items;
 }
@@ -4018,7 +4321,7 @@ function openReminderSettings() {
   updateReminderTestAvailability();
   $("#sidebar").classList.remove("open");
   $("#mobileMenu").setAttribute("aria-expanded", "false");
-  $("#remindersModal").showModal();
+  openDialog($("#remindersModal"));
 }
 
 async function scheduleTestNotification() {
@@ -4177,6 +4480,8 @@ function initStaticEvents() {
   $("#installAppBtn").addEventListener("click", installMobileApp);
   $$("[data-add-quadrant]").forEach((button) => button.addEventListener("click", () => openTaskModal("", button.dataset.addQuadrant)));
   $("#taskForm").addEventListener("submit", saveTask);
+  $("#taskType").addEventListener("change", handleTaskTypeChange);
+  $("#taskReminder").addEventListener("change", () => syncReminderCustomField("task"));
   $("#deleteTaskBtn").addEventListener("click", deleteTask);
   $("#addProjectBtn").addEventListener("click", () => openProjectModal());
   $("#projectForm").addEventListener("submit", saveProject);
@@ -4193,6 +4498,7 @@ function initStaticEvents() {
     button.closest("details")?.removeAttribute("open");
   }));
   $("#courseForm").addEventListener("submit", saveCourse);
+  $("#courseReminder").addEventListener("change", () => syncReminderCustomField("course"));
   $("#deleteCourseBtn").addEventListener("click", deleteCourse);
   $("#duplicateCourseBtn").addEventListener("click", duplicateCourseTime);
   $$("[data-week-preset]").forEach((button) => button.addEventListener("click", () => {
@@ -4200,7 +4506,7 @@ function initStaticEvents() {
     $("#courseWeeks").value = button.dataset.weekPreset === "odd" ? `1-${total}单周` : button.dataset.weekPreset === "even" ? `1-${total}双周` : `1-${total}`;
   }));
   $("#courseTaskActions").addEventListener("click", (event) => { const button = event.target.closest("[data-course-task]"); if (button) createTaskForCourse(button.dataset.courseTask); });
-  $("#courseLinkedTasks").addEventListener("click", (event) => { const button = event.target.closest("[data-linked-task-id]"); if (!button) return; $("#courseModal").close(); openTaskModal(button.dataset.linkedTaskId); });
+$("#courseLinkedTasks").addEventListener("click", (event) => { const button = event.target.closest("[data-linked-task-id]"); if (!button) return; closeDialog($("#courseModal")); openTaskModal(button.dataset.linkedTaskId); });
   $("#cancelOccurrenceBtn").addEventListener("click", toggleCurrentOccurrence);
   $("#rescheduleOccurrenceBtn").addEventListener("click", rescheduleCurrentOccurrence);
   $("#courseStartSection").addEventListener("change", () => {
@@ -4282,7 +4588,7 @@ function initStaticEvents() {
     else showToast("请输入整数周次");
   });
   $$("[data-schedule-mode]").forEach((button) => button.addEventListener("click", () => { scheduleMode = button.dataset.scheduleMode; localStorage.setItem("fangcun-schedule-mode", scheduleMode); renderAll(); }));
-  $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => $(`#${button.dataset.closeDialog}`).close()));
+$$(`[data-close-dialog]`).forEach((button) => button.addEventListener("click", () => closeDialog($(`#${button.dataset.closeDialog}`))));
   $("#quickAddForm").addEventListener("submit", submitQuickTask);
   $("#smartCaptureForm").addEventListener("submit", confirmSmartCapture);
   $("#smartCapturePreview").addEventListener("change", updateSmartDraftField);
@@ -4313,7 +4619,7 @@ function initStaticEvents() {
       const decision = decisionForQuadrant(quadrant.dataset.quadrant);
       Object.assign(task, decision, { quadrant: quadrant.dataset.quadrant });
       saveData();
-      showToast(`已移动到“${quadrantInfo[task.quadrant].name}”`);
+      showToast(`已移动到“${quadrantInfo[effectiveQuadrant(task)].name}”`);
     });
   });
   $("#exportBtn").addEventListener("click", exportData);
@@ -4340,7 +4646,7 @@ function initStaticEvents() {
   });
   $("#cloudModal").addEventListener("close", clearAgentAccess);
   window.addEventListener?.("pagehide", clearAgentAccess);
-  $("#cloudRegisterBtn").addEventListener("click", () => { $("#cloudModal").close(); showAuthGate(); setAuthMode("register"); });
+$("#cloudRegisterBtn").addEventListener("click", () => { closeDialog($("#cloudModal")); showAuthGate(); setAuthMode("register"); });
   $("#pullCloudBtn").addEventListener("click", pullCloudData);
   $("#pushCloudBtn").addEventListener("click", pushCloudData);
   $("#restoreLocalBtn").addEventListener("click", restorePreCloudData);
@@ -4370,7 +4676,7 @@ function initStaticEvents() {
   });
   $$("dialog").forEach((dialog) => dialog.addEventListener("click", (event) => {
     const rect = dialog.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog(dialog);
   }));
 }
 

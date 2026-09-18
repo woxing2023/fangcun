@@ -42,3 +42,9 @@ release/
 launch-codex.sh
 launch-refine.sh
 smoke-bisect-root.js
+
+# Rust 构建产物与系统垃圾（永不入库）
+target/
+**/target/
+.DS_Store
+__pycache__/

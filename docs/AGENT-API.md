@@ -1,6 +1,6 @@
-# 方寸 Agent API（v2.9.0）
+# 方寸 Agent API（v2.10.0）
 
-Agent API 让 Codex、Claude Code、Hermes 等编码代理读取当前账号的云端课表、任务与学期，并创建、编辑或完成任务。它不直接读取浏览器本机数据；使用前先在“数据与同步 → 方寸账号”同步。Agent 修改后，其他设备通过现有账号同步取得更新；两端同时修改仍按原有版本冲突流程处理。Rust 服务同时提供兼容的 `/api/v1/agent/*` 入口，未版本化 `/api/agent/*` 继续可用。
+Agent API v2.10.0 让 Codex、Claude Code、Hermes 等编码代理读取当前账号的云端课表、已求值课程实例、任务与学期，并创建、编辑或完成任务。应用版本（当前热修工作树仍为 2.8.0）与 Agent API 能力版本独立。它不直接读取浏览器本机数据；使用前先在“数据与同步 → 方寸账号”同步。Agent 修改后，其他设备通过现有账号同步取得更新；两端同时修改仍按原有版本冲突流程处理。
 
 ## 获取令牌与鉴权
 
@@ -19,6 +19,7 @@ Agent API 让 Codex、Claude Code、Hermes 等编码代理读取当前账号的�
 | `DELETE /api/agent/tokens/:name` | 用户会话 | 吊销 URL 编码后的名称，200；`{ok:true}` |
 | `GET /api/agent/audit` | 用户会话 | 最近 10 条业务活动，200；`{audit:[{action,detail,createdAt}]}`，最新在前 |
 | `GET /api/agent/schedule` | Agent 令牌 | 课表、长期项目与任务，200；`{courses,projects,tasks,semester,timeSlots,courseExceptions,calendarRules,revision,updatedAt}` |
+| `GET /api/agent/occurrences?from=YYYY-MM-DD&to=YYYY-MM-DD` | Agent 令牌 | 读取权威求值器产生的课程实例，200；仅返回白名单投影 |
 | `POST /api/agent/tasks` | Agent 令牌 | 创建任务，201；`{task,revision,updatedAt}` |
 | `PATCH /api/agent/tasks/:id` | Agent 令牌 | 编辑、改期、完成或恢复任务，200；`{task,revision,updatedAt}` |
 | `POST /api/agent/projects` | Agent 令牌 | 创建长期项目，201；`{project,revision,updatedAt}` |
@@ -27,7 +28,7 @@ Agent API 让 Codex、Claude Code、Hermes 等编码代理读取当前账号的�
 | `GET /api/agent/data` | Agent 令牌 | 读取完整方寸数据文档，200；`{data,revision,updatedAt}` |
 | `PUT /api/agent/data` | Agent 令牌 | 按版本原子替换完整数据文档，200；请求体 `{expectedRevision,data}` |
 
-v1 不开放任务 `DELETE`，也不提供课程、学期或批量覆盖写入。完成与恢复分别使用 `{"completed":true}`、`{"completed":false}`。
+v2.10.0 不开放任务 `DELETE`，也不提供专用课程或学期写入端点；批量完整替换只走 `PUT /api/agent/data` 的 `expectedRevision` 保护流程。本整合写侧只使用 task POST/PATCH。完成与恢复分别使用 `{"completed":true}`、`{"completed":false}`。
 
 令牌名称去掉首尾空白后为 1–60 字，不能含控制字符、无效 Unicode 或仅为 `.` / `..`，在当前用户内唯一。创建请求的 `expiresInDays` 可省略，默认 90 天，必须是 1–365 的整数。令牌和审计时间为 Unix 毫秒；`lastUsedAt` 未使用时为 `null`。日程响应的 `updatedAt` 为 ISO 时间字符串或 `null`。
 
@@ -54,6 +55,54 @@ PATCH 只改传入字段，未传字段保持原值；不能为空对象，不�
 ## 完整能力调用
 
 `GET /api/agent/capabilities` 可供 Agent 启动时发现能力。方寸的核心数据均保存在同一个文档中，因此需要批量处理课程、课表节次、学期、例外日期、节假日规则、任务和项目时，可使用完整数据接口：先读取 `GET /api/agent/data`，记录 `revision`，只修改 `data` 中需要改变的字段，再发送：
+
+能力响应必须声明 `apiVersion:"2.10.0"`、`schedule.read` 和 `occurrences.read`；写入器还必须检查 `tasks.create` 与 `tasks.update`。缺少能力时客户端应停止，不回退到 voice、session 或完整文档写入。
+
+## 课程实例读取
+
+`GET /api/agent/occurrences?from=2026-09-16&to=2026-10-16` 使用 Asia/Shanghai 自然日闭区间。`from`、`to` 都必须是实际存在的 `YYYY-MM-DD`，顺序正确且范围不超过 92 个自然日；成功响应头为 `Cache-Control: private, no-store`。端点直接消费服务端 `semesterCourseOccurrences(document)`，过滤实际发生日期 `date`，不在 Hermes 或 API 端复制周次、调休、停课和补课算法。
+
+成功响应顶层字段严格为：
+
+```json
+{
+  "apiVersion": "2.10.0",
+  "timeZone": "Asia/Shanghai",
+  "from": "2026-09-16",
+  "to": "2026-10-16",
+  "revision": 380,
+  "updatedAt": "2026-09-16T01:45:00.000Z",
+  "occurrences": [
+    {
+      "id": "course:c-physics:2026-09-18",
+      "courseId": "c-physics",
+      "name": "大学物理A（上）",
+      "code": "PHY1006",
+      "teacher": "周晓晴",
+      "campus": "云谷校区",
+      "location": "E13-105",
+      "notes": "",
+      "date": "2026-09-20",
+      "keyDate": "2026-09-18",
+      "day": 7,
+      "startSection": 1,
+      "endSection": 2,
+      "startTime": "08:00",
+      "endTime": "09:35",
+      "occurrenceChanged": true,
+      "changeType": "reschedule",
+      "isTeachingDay": true,
+      "teachingUseDay": 5,
+      "reminderMinutes": 15,
+      "quality": "ok"
+    }
+  ]
+}
+```
+
+实例字段是固定白名单：`id` 为 `course:<courseId>:<keyDate>`；`date` 是实际发生日，`keyDate` 沿用求值器；`day` 是实际日期星期；节次来自求值结果；对应 `timeSlots.number` 缺失时保留实例并将相应时间置为 `null`、`quality` 设为 `missing_time_slot`。`name` 可由变更记录覆盖课程名，`changeType` 为记录类型或 `teaching`/`none`；不返回 `record` 或完整数据文档。`isTeachingDay` 与 `teachingUseDay` 只投影同日 teaching 规则，不重新判断 holiday。
+
+缺少/错误日期、逆序或超过 92 日返回 400；缺失/无效令牌返回 401；非 GET 返回 405 并带 `Allow: GET`；来源、数据文档、限流和未预期错误分别沿用现有 403/409/429/500 约定。
 
 ```json
 {

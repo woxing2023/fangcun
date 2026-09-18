@@ -23,3 +23,33 @@
 在浅色和深色外观下，按住玻璃按钮并小幅移动手指，查看光泽跟随和松手后的收尾；再在宣纸面板上查看较柔和的光晕。随后正常滚动列表，确认装饰不会残留或挡住内容。
 
 打开课程表，检查彩色课程与宣纸底板，再用“全表”“清单”及横竖屏查看全部安排。切到后台再返回，确认交互仍可继续。验收不需要清除站点数据或卸载 APK。
+# Material specification: 2026-09-15-lab-align-v1
+
+This document is the human-readable contract for the shared optical renderer. It is a visual approximation of the lab reference, not a claim of per-pixel physical equivalence.
+
+## Frozen motion and profile contract
+
+The renderer owns the only runtime copy of these seven motion values:
+
+| value | frozen value |
+| --- | ---: |
+| `rippleStrength` | `0.74` |
+| `trailStrength` | `0.10` |
+| `trailDecay` | `0.76` |
+| `edgeStrength` | `2` |
+| `edgeSizeInfluence` | `0.89` |
+| `edgeSpread` | `0.17` |
+| `edgeSpeedResponse` | `1.5` |
+
+For `shortEdge = min(width, height)`, `t = clamp((shortEdge - 32) / 148, 0, 1)`, and `blend = t*t*(3-2*t)`:
+
+- `amplitude = 0.14 + 0.86*blend`
+- `radius = clamp(shortEdge*0.12, 4, 10)`
+- `damping = 0.976 + 0.011*blend`
+- `edgeAbsorption = 0.48 - 0.26*blend`
+
+The required profile samples are 32px: `0.14 / 4 / 0.976 / 0.48`, 44px: `0.15604445936074865 / 5.28 / 0.9762052198290329 / 0.4751493494955876`, 80px: `0.3527036898110675 / 9.6 / 0.9787206285906066 / 0.4156942333129331`, and 180px: `1 / 10 / 0.987 / 0.22`.
+
+`LIQUID_ENERGY_EPSILON` is `0.00001`. One shared canvas/context serves the active surface, with at most six wave sources and an internal pixel budget of `1,400,000`. Desktop Liquid uses one lens/canvas host; schedule touch uses one touch layer/canvas. The canvas is decorative and never owns application content or hit testing.
+
+When WebGL is unavailable, CSS feedback remains the fallback: glass glow opacity `.28`, paper glow opacity `.12`, and a 160ms ring from scale `.85` to `1.35` followed by opacity `0`. GPU success cancels and hides the fallback. Reduced motion, forced colors, hidden pages, scroll, cancellation, and context loss release the renderer/layer; these checks prove lifecycle behavior, not Android FPS.

@@ -55,7 +55,7 @@ async function main() {
   check(/<section class="admin-card"><form id="agentTokenForm"/.test(html) && /aria-describedby="agentTokenNameError"/.test(html), "表单复用卡片与相邻错误提示");
   check(app.includes('$("#cloudModal").addEventListener("close", clearAgentAccess)') && app.includes('("pagehide", clearAgentAccess)'), "弹窗关闭与页面退出均须清除令牌");
   check(!/localStorage|sessionStorage|console\./.test(source), "令牌管理不得持久化或记录明文");
-  check(!html.includes("?v=2.7.0") && app.includes('const APP_VERSION = "2.8.0"') && app.includes('const APP_BUILD = "20260915-pr2-link"'), "版本资源参数应一致升级");
+  check(!html.includes("?v=2.7.0") && app.includes('const APP_VERSION = "2.8.0"') && app.includes('const APP_BUILD = "20260915-frontend-lab-v1"'), "版本资源参数应一致升级");
 
   reset();
   const token = "test-only-one-time-token";
