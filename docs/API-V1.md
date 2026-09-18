@@ -18,9 +18,10 @@ Rust 服务从 `/api/v1` 提供版本化入口。现有网页客户端仍使用 
 - `GET|POST|DELETE /api/v1/calendar/subscription`
 - `GET /api/v1/admin/*`、`PUT /api/v1/admin/registration`、`PATCH /api/v1/admin/users/:id/status`
 - `GET|POST|DELETE /api/v1/integrations/:provider/*`
+- `/api/v1/agent/*`：令牌管理、审计、能力发现、日程读取、完整数据读写、任务和长期项目写入
 
 `GET /api/v1` 返回服务版本和资源清单，可用于客户端启动时探测。日历订阅的公开 ICS 地址仍是 `/calendar/:token`，因为它不是 API 会话端点。
 
 ## 约束
 
-v1 目前是已迁移核心 API 的版本化兼容入口，不代表 Node 端所有扩展能力已经迁移。Agent API（`/api/agent/*`）仍由现有 Node 服务实现，待完成令牌、审计、数据校验和任务/项目写入后再纳入 Rust v1；在此之前不应把 Rust 服务宣称为完整生产替代品。
+v1 是 Rust 服务的版本化兼容入口；现有网页继续使用未版本化 `/api`，Agent 客户端可使用 `/api/v1/agent/*`，旧的 `/api/agent/*` 入口也保持兼容。Agent 写入沿用 `expectedRevision` 版本保护，令牌只存 hash，业务请求受限流和审计约束。
