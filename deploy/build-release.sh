@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Linux counterpart of build-release.ps1; its root-file whitelist is shared.
 set -euo pipefail
-FANGCUN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-FANGCUN_RELEASE=2.7.0-calendar3
+FANGCUN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && { pwd -W 2>/dev/null || pwd; })
+FANGCUN_RELEASE=2.8.1-ui8
 FANGCUN_STAGE=$(mktemp -d /tmp/fangcun-release.XXXXXX)
 trap 'rm -rf -- "$FANGCUN_STAGE"' EXIT
 export FANGCUN_ROOT FANGCUN_STAGE
@@ -39,8 +39,8 @@ console.log(`Staged ${files.length} root files; Gradle wrapper unchanged.`);
 NODE
 mkdir -p release
 tar --format=ustar --owner=0 --group=0 --numeric-owner -czf "release/fangcun-release-$FANGCUN_RELEASE.tar.gz" -C "$FANGCUN_STAGE" .
-python3 deploy/scan-release-privacy.py "release/fangcun-release-$FANGCUN_RELEASE.tar.gz" --output release/fangcun-privacy-20260911-calendar3.json
+python3 deploy/scan-release-privacy.py "release/fangcun-release-$FANGCUN_RELEASE.tar.gz" --output "release/fangcun-privacy-$FANGCUN_RELEASE.json"
 cd release
-sha256sum "fangcun-release-$FANGCUN_RELEASE.tar.gz" > fangcun-SHA256SUMS-20260911-calendar3.txt
-sha256sum --check fangcun-SHA256SUMS-20260911-calendar3.txt
+sha256sum "fangcun-release-$FANGCUN_RELEASE.tar.gz" > "fangcun-SHA256SUMS-$FANGCUN_RELEASE.txt"
+sha256sum --check "fangcun-SHA256SUMS-$FANGCUN_RELEASE.txt"
 printf 'Release: %s/release/fangcun-release-%s.tar.gz\n' "$FANGCUN_ROOT" "$FANGCUN_RELEASE"

@@ -1,6 +1,6 @@
 {
   "name": "fangcun-matrix",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "private": true,
   "description": "以今天为执行中枢的本地优先个人行动系统",
   "scripts": {

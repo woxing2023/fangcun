@@ -1,5 +1,5 @@
-const APP_VERSION = "2.8.0";
-const APP_BUILD = "20260915-frontend-lab-v1";
+const APP_VERSION = "2.8.1";
+const APP_BUILD = "20260918-ui8-fixes";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";

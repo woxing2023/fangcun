@@ -284,7 +284,7 @@ async function main() {
     assert.equal(session.configured, true);
     assert.equal(session.authenticated, false);
     assert.equal(session.registrationOpen, false);
-    assert.equal(session.version, "2.8.0");
+    assert.equal(session.version, "2.8.1");
     const mobileLayout = await fetch(`${origin}/v22-layout.css?v=2.8.0`);
     assert.equal(mobileLayout.status, 200, "服务端必须实际提供最终移动布局，不能只在安装目录里存在");
     assert.match(mobileLayout.headers.get("content-type") || "", /text\/css/);
