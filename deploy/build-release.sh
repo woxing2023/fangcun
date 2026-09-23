@@ -2,7 +2,7 @@
 # Linux counterpart of build-release.ps1; its root-file whitelist is shared.
 set -euo pipefail
 FANGCUN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && { pwd -W 2>/dev/null || pwd; })
-FANGCUN_RELEASE=2.8.2
+FANGCUN_RELEASE=2.8.3
 # 2026-09-23 构建修复：mktemp 建在 MSYS /tmp 时 node(Windows) 把 /tmp/... 解析成 C:\tmp\...，
 # tar(MSYS) 读的却是 MSYS /tmp 映射目录——两个目录不同导致 2.8.2 tar 只有 94 字节空壳。
 # 修复：stage 直接建在 release/ 下（Windows 原生路径），node 与 tar 读同一目录。
