@@ -1,4 +1,4 @@
-const CACHE_NAME = "fangcun-v281-20260918-ui8-fixes";
+const CACHE_NAME = "fangcun-v282-20260923-timetable-slot-fix";
 const APP_SHELL = ["./", "./index.html", "./privacy.html", "./styles.css?v=2.8.0-frontend1", "./v22-layout.css?v=2.8.0", "./smart-parser.js?v=2.8.0", "./docx-schedule-parser.js?v=2.8.0", "./app.js?v=2.8.0-frontend1", "./manifest.webmanifest?v=2.8.0", "./icon.svg", "./appearance.css?v=7", "./xuan.css?v=4", "./xuan-fibers.svg?v=1", "./xuan-fibers-mobile.png?v=1", "./xuan-sans.woff2?v=2", "./xuan-serif.woff2?v=2", "./material-light.js?v=6", "./touch-material.js?v=3", "./mobile-ui.css?v=2", "./mobile-material.css?v=3", "./mobile-calendar.css?v=1", "./calendar-surface.css?v=1", "./appearance-controls.js?v=1", "./liquid.css?v=6", "./liquid-select.js?v=7", "./appearance.js?v=8", "./liquid-renderer.js"];
 
 self.addEventListener("install", (event) => {

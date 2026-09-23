@@ -1,5 +1,5 @@
-const APP_VERSION = "2.8.1";
-const APP_BUILD = "20260918-ui8-fixes";
+const APP_VERSION = "2.8.2";
+const APP_BUILD = "20260923-timetable-slot-fix";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";
@@ -300,7 +300,25 @@ function normalizeData(saved) {
     saved.timeSlots = defaultTimeSlots();
     saved.schemaVersion = 4;
   }
-  saved.timeSlots = Array.isArray(saved.timeSlots) && saved.timeSlots.length ? saved.timeSlots : defaultTimeSlots();
+  // 2026-09-23 Robin 反馈「课表模式是按节次来的，是有问题的」：手机端课表模式时段列出现幻影节次
+  // （第 14/18/19/15 节等越界行），根因 = 手机端原生日历双向同步 upsertExactTimeSlot 把课程起止
+  // 时间 push 成新 slot + normalizeData 只查数组非空不查内容，脏 timeSlots 原样渲染（周视图固定半点网格不受影响）。
+  // 兜底清洗：格式校验（HH:MM、无倒挂）+ 时段互不重叠（标准作息节次互不重叠，
+  // 手机端拼接出的长时段如 08:50-11:25 与多个标准节次重叠=污染特征）→ 剔除后按时间排序重编号 1..N。
+  if (Array.isArray(saved.timeSlots) && saved.timeSlots.length) {
+    const valid = saved.timeSlots.filter((slot) => slot && typeof slot === "object"
+      && /^\d{2}:\d{2}$/.test(slot.startTime) && /^\d{2}:\d{2}$/.test(slot.endTime)
+      && slot.startTime < slot.endTime)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime));
+    const kept = [];
+    for (const slot of valid) {
+      const overlaps = kept.some((k) => slot.startTime < k.endTime && k.startTime < slot.endTime);
+      if (!overlaps) kept.push(slot);
+    }
+    saved.timeSlots = kept.length ? kept.map((slot, index) => ({ number: index + 1, startTime: slot.startTime, endTime: slot.endTime })) : defaultTimeSlots();
+  } else {
+    saved.timeSlots = defaultTimeSlots();
+  }
   saved.courses = Array.isArray(saved.courses) ? saved.courses : [];
   saved.courseExceptions = Array.isArray(saved.courseExceptions) ? saved.courseExceptions : [];
   saved.calendarRules = Array.isArray(saved.calendarRules) ? saved.calendarRules : [];
@@ -330,6 +348,15 @@ function normalizeData(saved) {
     project.milestones = Array.isArray(project.milestones) ? project.milestones : [];
   });
   saved.courses.forEach((course) => { course.code ||= ""; course.campus ||= ""; course.link ||= ""; course.credits ||= ""; course.alarmMode = Boolean(course.alarmMode); });
+  // 2026-09-23 课表幻影节次修复配套：timeSlots 清洗重编号后，越界/失配的课程节次钳回有效范围，
+  // 避免 startSection 指向被剔除的脏节次导致课程在课表模式消失（同 saveSemester 钳制行为）。
+  const maxSection = saved.timeSlots.length;
+  saved.courses.forEach((course) => {
+    if (typeof course.startSection !== "number" || course.startSection < 1) course.startSection = 1;
+    if (typeof course.endSection !== "number" || course.endSection < course.startSection) course.endSection = course.startSection;
+    course.startSection = Math.min(course.startSection, maxSection);
+    course.endSection = Math.min(Math.max(course.endSection, course.startSection), maxSection);
+  });
   applyCourseColorSystem(saved.courses);
   return saved;
 }
@@ -4150,13 +4177,21 @@ function nativeCalendarItems() {
   return items;
 }
 
+// 2026-09-23 Robin 反馈「课表模式是按节次来的，是有问题的」根因修复：
+// 原实现把手机端原生日历回写的课程起止时间 push 成新 slot（number=max+1 越界），
+// 导致课表模式时段列出现幻影节次（第 14/15/18/19 节）。
+// 新语义：课程时间恰好等于某节次 → 复用该节次；否则映射到覆盖该时段的标准节次（起=包含开始时间的节次，止=包含结束时间的节次），
+// 绝不新增 slot——节次模板只能由用户在学期设置中修改。
 function upsertExactTimeSlot(startTime, endTime) {
-  let slot = data.timeSlots.find((item) => item.startTime === startTime && item.endTime === endTime);
-  if (slot) return slot.number;
-  const nextNumber = Math.max(0, ...data.timeSlots.map((item) => Number(item.number) || 0)) + 1;
-  data.timeSlots.push({ number: nextNumber, startTime, endTime });
-  data.timeSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  return nextNumber;
+  const endAt = endTime && endTime !== startTime ? endTime : startTime;
+  const exact = data.timeSlots.find((item) => item.startTime === startTime && item.endTime === endAt);
+  if (exact) return exact.number;
+  const covering = (time) => data.timeSlots.find((item) => item.startTime <= time && time <= item.endTime);
+  const startSlot = covering(startTime) || data.timeSlots.reduce((best, item) => (item.startTime <= startTime && (!best || item.startTime > best.startTime)) ? item : best, null) || data.timeSlots[0];
+  const endSlot = covering(endAt) || startSlot;
+  const startNumber = Number(startSlot?.number) || 1;
+  const endNumber = Number(endSlot?.number) || startNumber;
+  return Math.max(startNumber, endNumber);
 }
 
 function applyNativeCalendarEvent(event) {

@@ -9,7 +9,7 @@ const { GoogleIntegration } = require("./google-sync");
 const { semesterCourseOccurrences, dayNumber } = require("./calendar-occurrences");
 const { SCHEMA: LINK_SCHEMA, VERSION: LINK_VERSION, buildSnapshot } = require("./link-contract");
 
-const APP_VERSION = "2.8.1";
+const APP_VERSION = "2.8.2";
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const root = __dirname;

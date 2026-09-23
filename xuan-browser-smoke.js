@@ -144,12 +144,12 @@ const { chromium } = require(process.env.FANGCUN_PLAYWRIGHT_MODULE || 'playwrigh
       const baked = new Image(); baked.src='/xuan-fibers-mobile.png?v=1'; await baked.decode();
       const optics = await import('/liquid-renderer.js');
       const touch = await fetch('/touch-material.js?v=3').then(r=>r.text());
-      const app = await fetch('/app.js?v=2.8.1-ui8').then(r => r.text());
+      const app = await fetch('/app.js?v=2.8.2').then(r => r.text());
       const mobile=await Promise.all(['mobile-ui.css?v=2','mobile-material.css?v=3','mobile-calendar.css?v=1','calendar-surface.css?v=1','appearance-controls.js?v=1'].map(name=>fetch('/'+name).then(r=>r.ok)));
       const fonts=await Promise.all(['xuan-sans','xuan-serif'].map(async name=>{
         const face=new FontFace(name,`url(/${name}.woff2?v=2)`); await face.load(); return face.status;
       }));
-      return { css:css.includes('--xuan-base'), image:image.naturalWidth, baked:baked.naturalWidth, optics:typeof optics.createRenderer, touch:touch.includes('FangcunTouchMaterial'), build:app.includes('20260918-ui8-fixes'), mobile, fonts };
+      return { css:css.includes('--xuan-base'), image:image.naturalWidth, baked:baked.naturalWidth, optics:typeof optics.createRenderer, touch:touch.includes('FangcunTouchMaterial'), build:app.includes('20260923-timetable-slot-fix'), mobile, fonts };
     });
     assert.deepEqual(result, { css:true, image:360, baked:720, optics:'function', touch:true, build:true, mobile:[true,true,true,true,true], fonts:['loaded','loaded'] });
     await offline.close();

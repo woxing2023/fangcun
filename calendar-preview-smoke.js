@@ -14,7 +14,7 @@ const {chromium}=require(process.env.FANGCUN_PLAYWRIGHT_MODULE||'playwright');
  try{
   await page.goto(pathToFileURL(path.join(__dirname,'release/calendar-review.html')).href);
   const payload=await page.evaluate(()=>({build:preview.build,count:Object.keys(preview.snapshots).length,desktopCoarseMedia:/\(pointer:\s*coarse\)/.test(preview.styles.desktop),touchCoarseMedia:/\(pointer:\s*coarse\)/.test(preview.styles.touch)}));
-  assert.equal(payload.build,'20260918-ui8-fixes');assert.equal(payload.count,12);
+  assert.equal(payload.build,'20260923-timetable-slot-fix');assert.equal(payload.count,12);
   assert.equal(payload.desktopCoarseMedia,true,'fine snapshot retains original CSS media');
   assert.equal(payload.touchCoarseMedia,false,'touch stylesheet explicitly simulates coarse media');
   for(const orientation of ['desktop','portrait','landscape'])for(const calendar of ['week','timetable'])for(const layout of ['overview','list']){
