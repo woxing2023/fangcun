@@ -9,7 +9,7 @@ const { GoogleIntegration } = require("./google-sync");
 const { semesterCourseOccurrences, dayNumber } = require("./calendar-occurrences");
 const { SCHEMA: LINK_SCHEMA, VERSION: LINK_VERSION, buildSnapshot } = require("./link-contract");
 
-const APP_VERSION = "2.8.2";
+const APP_VERSION = "2.8.3";
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const root = __dirname;
@@ -419,9 +419,14 @@ function buildCalendar(document, ownerName = "方寸") {
   if (semesterStart) semesterCourseOccurrences(document).forEach(({ course, occurrence, dateKey, keyDate, record }) => {
     const startSlot = slot(occurrence.startSection);
     const endSlot = slot(occurrence.endSection);
-    if (!startSlot || !endSlot) return;
+    // 2026-09-23 Robin 反馈「这个10月14号应该正常上课啊，为什么课没了」：调课记录幻影节次落空时
+    // 回退课程自身定义节次（客户端 normalizeData 已钳制课程节次到有效范围），不再静默丢课——
+    // 日历订阅与安卓原生日历同步共用此导出口径。
+    const fallbackSlot = (section) => slot(section) || timeSlots[Math.min(Math.max(Number(section) || 1, 1), timeSlots.length) - 1] || timeSlots[0];
+    const effectiveStart = startSlot || fallbackSlot(occurrence.startSection);
+    const effectiveEnd = endSlot || fallbackSlot(occurrence.endSection) || effectiveStart;
     const title = String(record?.name || course.name || "课程");
-    lines.push("BEGIN:VEVENT", `UID:course-${icsEscape(course.id || crypto.randomUUID())}-${keyDate}@fangcun`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Asia/Shanghai:${compactDateTime(dateKey, startSlot.startTime)}`, `DTEND;TZID=Asia/Shanghai:${compactDateTime(dateKey, endSlot.endTime)}`, `SUMMARY:${icsEscape(title)}`, `LOCATION:${icsEscape([course.campus, course.location].filter(Boolean).join(" · "))}`, `DESCRIPTION:${icsEscape([course.code, course.teacher, course.notes].filter(Boolean).join(" · "))}`);
+    lines.push("BEGIN:VEVENT", `UID:course-${icsEscape(course.id || crypto.randomUUID())}-${keyDate}@fangcun`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Asia/Shanghai:${compactDateTime(dateKey, effectiveStart.startTime)}`, `DTEND;TZID=Asia/Shanghai:${compactDateTime(dateKey, effectiveEnd.endTime)}`, `SUMMARY:${icsEscape(title)}`, `LOCATION:${icsEscape([course.campus, course.location].filter(Boolean).join(" · "))}`, `DESCRIPTION:${icsEscape([course.code, course.teacher, course.notes].filter(Boolean).join(" · "))}`);
     calendarAlarm(lines, course.reminderMinutes, `${title} 即将开始`);
     lines.push("END:VEVENT");
   });

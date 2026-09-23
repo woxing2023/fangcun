@@ -1,5 +1,5 @@
-const APP_VERSION = "2.8.2";
-const APP_BUILD = "20260923-timetable-slot-fix";
+const APP_VERSION = "2.8.3";
+const APP_BUILD = "20260923-oct14-exception-fix";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";
@@ -356,6 +356,36 @@ function normalizeData(saved) {
     if (typeof course.endSection !== "number" || course.endSection < course.startSection) course.endSection = course.startSection;
     course.startSection = Math.min(course.startSection, maxSection);
     course.endSection = Math.min(Math.max(course.endSection, course.startSection), maxSection);
+  });
+  // 2026-09-23 Robin 反馈「这个10月14号应该正常上课啊，为什么课没了」：调课记录（courseExceptions）
+  // 的节次同样受幻影节次污染——手机端原生日历同步当初写下的 reschedule 里 startSection/endSection
+  // 指向第 14/15/18/19 节等越界幻影行，timeSlots 清洗后 slotByNumber 落空，
+  // 周视图（startIndex<0 return）与课表模式整体跳过渲染 → 调课当天的课程消失。
+  // 修复：exceptions 里的幻影节次映射回覆盖该时段的标准节次（与 upsertExactTimeSlot 同语义）；
+  // 无时段信息（cancel 记录）不动；映射后越界钳回有效范围。
+  const slotSpan = (slot) => ({ startTime: slot.startTime, endTime: slot.endTime });
+  saved.courseExceptions.forEach((exception) => {
+    const startSection = Number(exception.startSection);
+    const endSection = Number(exception.endSection);
+    if (!Number.isFinite(startSection) && !Number.isFinite(endSection)) return;
+    const startSlot = saved.timeSlots.find((item) => Number(item.number) === startSection);
+    const endSlot = saved.timeSlots.find((item) => Number(item.number) === endSection);
+    if (startSlot && endSlot) return;
+    const startCover = (time) => saved.timeSlots.find((item) => item.startTime <= time && time <= item.endTime);
+    const startByTime = exception.startTime && startCover(exception.startTime);
+    const endByTime = exception.endTime && startCover(exception.endTime);
+    const mappedStart = startByTime || (Number.isFinite(startSection) ? saved.timeSlots[Math.min(Math.max(startSection, 1), saved.timeSlots.length) - 1] : null);
+    const mappedEnd = endByTime || mappedStart;
+    if (mappedStart) exception.startSection = Number(mappedStart.number);
+    if (mappedEnd) exception.endSection = Number(mappedEnd.number);
+  });
+  saved.courseExceptions.forEach((exception) => {
+    // cancel 记录没有节次字段，不注入——保持 cancel 语义纯净。
+    if (typeof exception.startSection !== "number" || !Number.isFinite(Number(exception.startSection))) return;
+    if (exception.startSection < 1) exception.startSection = 1;
+    if (typeof exception.endSection !== "number" || !Number.isFinite(Number(exception.endSection)) || exception.endSection < exception.startSection) exception.endSection = exception.startSection;
+    exception.startSection = Math.min(exception.startSection, maxSection);
+    exception.endSection = Math.min(Math.max(exception.endSection, exception.startSection), maxSection);
   });
   applyCourseColorSystem(saved.courses);
   return saved;
@@ -1688,6 +1718,10 @@ function minutesLabel(minutes) {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
+// 2026-09-23 Robin 反馈「这个10月14号应该正常上课啊，为什么课没了」：周课表渲染对调课记录的
+// 幻影节次静默跳过（startIndex<0 return）——清洗后的标准 timeSlots 里找不到第 14/15 节，
+// 该调课课程整块消失。兜底：节次落空时回退课程自身定义节次（课程定义已被钳制在有效范围内），
+// 不再静默丢课；调课时段与标准节次的映射由 normalizeData 的 exceptions 清洗负责。
 function weekCalendarModel(start) {
   const firstKey = localISO(start);
   const lastKey = localISO(addDays(start, 6));
@@ -1702,8 +1736,12 @@ function weekCalendarModel(start) {
     data.courses.map((course) => courseOccurrence(course, date, context)).filter(Boolean).forEach((course) => {
       const startSlot = slotByNumber(course.startSection);
       const endSlot = slotByNumber(course.endSection);
-      if (!startSlot || !endSlot) return;
-      timed.push({ kind: "course", id: course.id, day, start: timeMinutes(startSlot.startTime), end: timeMinutes(endSlot.endTime), title: course.name, detail: coursePlace(course), color: course.color });
+      // 2026-09-23 Robin 反馈「这个10月14号应该正常上课啊，为什么课没了」：调课记录节次落空时
+      // 回退课程自身定义节次（courses 已被 normalizeData 钳制在有效范围内），不再静默丢课——
+      // 此处丢失会连带周视图/课表列表/日历焦点全部消失该课程。
+      const effectiveStart = startSlot || slotByNumber(Math.min(Math.max(Number(course.startSection) || 1, 1), data.timeSlots.length));
+      const effectiveEnd = endSlot || effectiveStart;
+      timed.push({ kind: "course", id: course.id, day, start: timeMinutes(effectiveStart.startTime), end: timeMinutes((effectiveEnd || effectiveStart).endTime), title: course.name, detail: coursePlace(course), color: course.color });
     });
   }
 
@@ -2103,7 +2141,10 @@ function renderSchedule() {
     weekCourses.forEach((course) => {
       const startIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.startSection));
       const endIndex = data.timeSlots.findIndex((slot) => Number(slot.number) === Number(course.endSection));
-      if (startIndex < 0 || endIndex < 0) return;
+      // 2026-09-23 Robin 反馈「这个10月14号应该正常上课啊，为什么课没了」：节次落空不再静默跳过——
+      // 回退课程自身定义节次（courses 已被 normalizeData 钳制在有效范围内），调课课程不再整块消失。
+      const fallbackStart = startIndex < 0 ? Math.min(Math.max(Number(course.startSection) || 1, 1), data.timeSlots.length) - 1 : startIndex;
+      const fallbackEnd = endIndex < 0 ? Math.min(Math.max(Number(course.endSection) || fallbackStart + 1, fallbackStart + 1), data.timeSlots.length) - 1 : endIndex;
       const date = addDays(start, course.day - 1);
       const now = new Date();
       const startSlot = slotByNumber(course.startSection);
@@ -2111,7 +2152,7 @@ function renderSchedule() {
       const startAt = new Date(`${localISO(date)}T${startSlot.startTime}:00`);
       const endAt = new Date(`${localISO(date)}T${endSlot.endTime}:00`);
       const state = now > endAt ? "past" : now >= startAt && now <= endAt ? "current" : "";
-      html += `<button class="course-block ${state}" draggable="true" data-course-id="${course.id}" data-calendar-start="${startAt.getTime()}" data-calendar-end="${endAt.getTime()}" aria-label="${escapeHTML(`${course.name} ${courseTimeText(course)} ${coursePlace(course) || "地点待定"}`)}" title="${escapeHTML(course.name)}" style="--course-color:${course.color};--course-semantic-color:${calendarSemanticColor(course)};grid-column:${course.day + 1};grid-row:${startIndex + 2}/${endIndex + 3}"><strong class="calendar-event-title">${escapeHTML(course.name)}${course.occurrenceChanged ? " · 调" : ""}</strong><span class="calendar-event-place">${escapeHTML(coursePlace(course) || "地点待定")}</span><span class="calendar-event-time">${escapeHTML(courseTimeText(course))}</span></button>`;
+      html += `<button class="course-block ${state}" draggable="true" data-course-id="${course.id}" data-calendar-start="${startAt.getTime()}" data-calendar-end="${endAt.getTime()}" aria-label="${escapeHTML(`${course.name} ${courseTimeText(course)} ${coursePlace(course) || "地点待定"}`)}" title="${escapeHTML(course.name)}" style="--course-color:${course.color};--course-semantic-color:${calendarSemanticColor(course)};grid-column:${course.day + 1};grid-row:${fallbackStart + 2}/${fallbackEnd + 3}"><strong class="calendar-event-title">${escapeHTML(course.name)}${course.occurrenceChanged ? " · 调" : ""}</strong><span class="calendar-event-place">${escapeHTML(coursePlace(course) || "地点待定")}</span><span class="calendar-event-time">${escapeHTML(courseTimeText(course))}</span></button>`;
     });
     board.innerHTML = html;
 
