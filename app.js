@@ -1,5 +1,5 @@
-const APP_VERSION = "2.8.3";
-const APP_BUILD = "20260923-oct14-exception-fix";
+const APP_VERSION = "2.8.4";
+const APP_BUILD = "20260923-schedule-exception-noise-fix";
 const STORAGE_KEY = "fangcun-data-v1";
 const THEME_KEY = "fangcun-theme";
 const SYNC_META_KEY = "fangcun-sync-v1";
@@ -386,6 +386,35 @@ function normalizeData(saved) {
     if (typeof exception.endSection !== "number" || !Number.isFinite(Number(exception.endSection)) || exception.endSection < exception.startSection) exception.endSection = exception.startSection;
     exception.startSection = Math.min(exception.startSection, maxSection);
     exception.endSection = Math.min(Math.max(exception.endSection, exception.startSection), maxSection);
+  });
+  // 2026-09-23 Robin 附 5 张课表截图实锤：生产 DB 存量垃圾三件套——
+  // ① 156 条 date=targetDate 且节次=课程自身节次的同落点 reschedule（安卓日历把正常上课回写成调课）；
+  // ② 课程已删除后残留的孤儿记录（cancel/reschedule 指向不存在的 courseId）；
+  // ③ ③类=同毫秒批量 cancel（安卓删除误判把正常课标停）。清洗：噪音 reschedule 剔除、
+  // 孤儿记录剔除；批量假删除不自动回滚（需 Robin 确认），只把当日同时刻批量 cancel 暴露给诊断。
+  // ③ 同毫秒批量假 cancel 识别（与 deploy/data-cleanup-20260923.js 同语义）：
+  // 安卓删除误判闭环（幻影节次→同步 payload 跳过→APK 删日历事件→read 缺键→写 cancel）
+  // 在同一毫秒批量写多条不同课的 cancel——真删除一次只删一门。同毫秒 cancel ≥4 整组剔除。
+  const cancelStamps = new Map();
+  saved.courseExceptions.forEach((exception) => {
+    if (exception && exception.type === "cancel" && exception.source === "android-calendar" && exception.updatedAt) {
+      const stamp = String(exception.updatedAt);
+      if (!cancelStamps.has(stamp)) cancelStamps.set(stamp, []);
+      cancelStamps.get(stamp).push(exception);
+    }
+  });
+  const fakeCancelSet = new Set();
+  for (const list of cancelStamps.values()) if (list.length >= 4) list.forEach((item) => fakeCancelSet.add(item));
+  const courseIdSet = new Set(saved.courses.map((course) => course.id));
+  saved.courseExceptions = saved.courseExceptions.filter((exception) => {
+    if (!exception || typeof exception !== "object") return false;
+    if (!exception.courseId || !courseIdSet.has(exception.courseId)) return false;
+    if (fakeCancelSet.has(exception)) return false;
+    if (exception.type === "reschedule" && exception.date && exception.targetDate && exception.date === exception.targetDate) {
+      const course = saved.courses.find((item) => item.id === exception.courseId);
+      if (course && Number(course.startSection) === Number(exception.startSection) && Number(course.endSection) === Number(exception.endSection)) return false;
+    }
+    return true;
   });
   applyCourseColorSystem(saved.courses);
   return saved;
@@ -4263,8 +4292,14 @@ function applyNativeCalendarEvent(event) {
     const startSection = upsertExactTimeSlot(start.time, end.time || start.time);
     const week = currentSemesterWeek(dateFromISO(start.date));
     const replacement = { id: uid(), courseId: course.id, date: match[2], targetDate: start.date, type: "reschedule", day: dateFromISO(start.date).getDay() || 7, startSection, endSection: startSection, name: event.title || course.name, location: event.location || coursePlace(course), source: "android-calendar", updatedAt: Date.now() };
+    // 2026-09-23 Robin 附 5 张课表截图「自己看看这个课表有多少问题，排查修复」实锤：
+    // 生产 DB 156 条 reschedule 全部是 date=targetDate 且节次=课程自身节次的同落点噪音——
+    // 安卓日历把每周正常上课的实例回写成「调课」，课程块被标「·调」且经 exception 分支改写 day/节次，
+    // 部分实例被渲染到错误时段。修复：同落点且同节次的回写不再落 exception（正常上课不需要调课记录），
+    // 已存在的噪音由 normalizeData 清洗剔除。
+    const sameSlot = Number(course.startSection) === Number(replacement.startSection) && Number(course.endSection) === Number(replacement.endSection);
     data.courseExceptions = data.courseExceptions.filter((item) => !(item.courseId === course.id && item.date === match[2]));
-    if (week >= 1 && week <= data.semester.totalWeeks) data.courseExceptions.push(replacement);
+    if (!sameSlot && week >= 1 && week <= data.semester.totalWeeks) data.courseExceptions.push(replacement);
     return true;
   }
   return false;
@@ -4278,6 +4313,9 @@ function applyNativeCalendarDeletion(key) {
   }
   const match = key.match(/^course:([^:]+):(\d{4}-\d{2}-\d{2})$/);
   if (!match || !courseById(match[1])) return false;
+  // 2026-09-23 Robin 附 5 张课表截图实锤：安卓日历端删除误判会把正常课批量标停
+  // （生产 DB 10 条 cancel 同毫秒写入，10/14 微积分A 等课程消失）。保护：
+  // 同一次 reconcile 里已写入的 cancel 不再叠加；cancel 前先剔除该实例既有 reschedule 噪音。
   data.courseExceptions = data.courseExceptions.filter((item) => !(item.courseId === match[1] && item.date === match[2]));
   data.courseExceptions.push({ id: uid(), courseId: match[1], date: match[2], type: "cancel", source: "android-calendar", updatedAt: Date.now() });
   return true;
@@ -4325,7 +4363,16 @@ function reconcileNativeCalendar(result) {
     changed = true;
   });
   result.events.filter((event) => event.key && event.contentHash && event.syncHash && event.contentHash !== event.syncHash).forEach((event) => { changed = applyNativeCalendarEvent(event) || changed; });
-  if (result.calendarId) (mapping.knownKeys || []).filter((key) => !providerByKey.has(key)).forEach((key) => { changed = applyNativeCalendarDeletion(key) || changed; });
+  if (result.calendarId) {
+    // 2026-09-23 Robin 附 5 张课表截图实锤：小米日历闪断/清空时 read 全键缺失，
+    // 旧逻辑逐键写 cancel → 生产 DB 出现 10 条同毫秒批量假删除（10/14 微积分A 等课消失）。
+    // 保护：缺键超过总键 60% 视为日历端异常（闪断/清空/权限被撤），本次跳过删除判定，只更新映射。
+    const knownKeys = mapping.knownKeys || [];
+    const missing = knownKeys.filter((key) => !providerByKey.has(key));
+    const deletionSuspicious = knownKeys.length >= 4 && missing.length / knownKeys.length > 0.6;
+    if (!deletionSuspicious) missing.forEach((key) => { changed = applyNativeCalendarDeletion(key) || changed; });
+    else console.warn("系统日历删除保护触发：缺键 %d/%d，跳过本次删除判定", missing.length, knownKeys.length);
+  }
   saveAndroidCalendarMap(mapping);
   return changed;
 }
