@@ -18,6 +18,10 @@
 - v2.5.0 手机长期项目修复：统计卡回归正常文档流，行动与编辑按钮使用等宽触控区，不再遮挡首张项目卡或漂到卡片外
 - v2.5.1 登录兼容与手机修复：已有账号不再被 10 位前端限制挡住，注册/改密最低 8 位；提供服务器离线密码重置，并修正备份按钮与横屏四象限溢出
 - v2.7.0 通用日历与提醒：年、月、周、日视图统一展示日程、任务、期限和课程，课表作为独立模式；支持 Google/Outlook/APK 系统日历增量双向同步，以及安卓精确通知和 24 小时内系统闹钟确认
+- v2.8.0 Agent API 与 Rust 服务端：编码代理（Codex、Claude Code、Hermes 等）可经 Bearer 令牌读写账号的课表、课程实例、任务与项目，含令牌管理、限流与审计；`rust-server/` 提供保留同一 API 路径与 JSON 格式的 Rust 实现（见 `docs/AGENT-API.md`、`rust-server/README.md`）
+- v2.8.0 手机互联与前端实验室：`fangcun.link.v1` 数据标准落地，手机与手环端以只读快照接入（`apps/fangcun_band`，见 `docs/LINK-DATA-CONTRACT.md`）；修复调休补课（2026-09-20）；上线 `/api/agent/occurrences` 与 calendar-occurrences 权威求值模块
+- v2.8.1–2.8.3 界面与课表修复：UI 8+1（背景中性化、焦虑话术软化、四象限排序等）；课表模式与调课记录的幻影节次修复，存量脏数据自动清洗、渲染回退兜底，不再静默丢课
+- v2.8.4 安卓日历同步三件套污染清洗：同落点改期噪音、孤儿记录、同毫秒批量假取消三类污染全链路清洗；附服务器数据清洗脚本（`deploy/data-cleanup-20260923.js` / `.py`）
 - v2.4.1 横屏重构：普通页面采用左侧紧凑导航轨，课表保留沉浸模式；Android 壳启用 edge-to-edge 与短边刘海布局，消除右侧黑边
 - v2.4.0 手机横屏沉浸课表：填满左右安全区、隐藏重复底栏、压缩固定工具区，并保留导入、校历、设置与添加课程入口；主要导航统一为线性 SVG 图标
 - v2.3.1 智能课程配色：同一门课的所有时段固定同色，理工、数计、人文、语言、体育、商科和艺术分别使用相近色系；不同课程在同一色系内保持可区分颜色
@@ -95,7 +99,7 @@ npm run check
 
 ## 部署到 Ubuntu 高端口
 
-当前 `20260911-calendar-v3` 更新使用 [Hermes 发布及 Workbench 升级](docs/workbench-xuan.md)：本地打包与隐私扫描，Hermes 上传 Release 后从原云服务器轻量应用服务器 Workbench 校验升级。下面保留通用首次安装参考。
+自 `20260911-calendar-v3` 起，部署更新采用 [Hermes 发布及 Workbench 升级](docs/workbench-xuan.md) 流程：本地打包与隐私扫描，上传 Release 后在轻量应用服务器的 Workbench 中校验升级。下面保留通用首次安装参考。
 
 当前部署方案不会占用或修改 80、443，也不会触碰 Hysteria。默认只监听服务器本机的 `127.0.0.1:18443`，由免费 Cloudflare Tunnel 提供公网 HTTPS。
 
@@ -152,3 +156,7 @@ sudo bash deploy/backup.sh
 若希望与 Outlook、Google、Windows 和 Android 系统日历互相修改，在方寸中打开“日历 → 同步与导入”：连接 Outlook、Google，并在 APK 中开启“小米 / Android 系统日历”。ICS 私密订阅仍作为只读兼容模式。应用注册、云服务器变量、手机授权、冲突规则和故障排查见 `docs/calendar-sync-guide.md`。
 
 完整的本地打包、Windows 一键上传升级、手动 SCP 命令、服务器验收、APK 构建、Android 安装和回滚流程见 `docs/deployment-guide.md`。
+
+## 版本历史
+
+部署包、构建标识与每次变更说明见 [Releases](https://github.com/woxing2023/fangcun/releases)；最新部署包为 2.8.4（2026-09-23）。
